@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/lome-calc", "crates/lome-lang"]
+members = ["crates/calc", "crates/lang"]
 
 [workspace.package]
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "BSD-3-Clause"
