@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/lome-calc", "crates/lome-lang"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.75"
+license = "BSD-2-Clause"
+authors = ["Hans S. <hans@0x8.io>"]
+description = "Platform specific Human-Interfaces for Eta-Core"
+repository = "https://github.com/DaBigBlob/eta-rs"
+readme = "README.md"
+
+# --release
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = 0
+debug-assertions = false
+overflow-checks = false
+incremental = false
+
+# --profile small
+[profile.small]
+inherits = "release"
+opt-level = "z"

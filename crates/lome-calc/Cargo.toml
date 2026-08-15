@@ -1,0 +1,12 @@
+[package]
+name = "lome-calc"
+description = "Loam Core Calculus (no_std)"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors = ["Hans S. <hans@0x8.io>"]
+readme = "README.md"
+
+[dependencies]
+hashbrown = { version = "0.16.1", default-features = false, features = ["default-hasher", "inline-more"] }
