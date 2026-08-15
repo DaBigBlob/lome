@@ -10,4 +10,4 @@ repository.workspace = true
 readme = "README.md"
 
 [dependencies]
-eta-core = { workspace = true }
+lome-calc = { workspace = true }
