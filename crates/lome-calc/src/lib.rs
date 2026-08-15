@@ -1,4 +1,3 @@
-/* BSD-3 License */
 #![no_std]
 #![deny(
     unsafe_op_in_unsafe_fn,

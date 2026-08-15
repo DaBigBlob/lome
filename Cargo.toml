@@ -5,7 +5,7 @@ members = ["crates/lome-calc", "crates/lome-lang"]
 [workspace.package]
 edition = "2021"
 rust-version = "1.75"
-license = "BSD-2-Clause"
+license = "BSD-3-Clause"
 authors = ["Hans S. <hans@0x8.io>"]
 description = "Pure Type System implemented as Lambda-Typed-Lambda-Calculus implemented as Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
 repository = "https://github.com/DaBigBlob/eta-rs"
