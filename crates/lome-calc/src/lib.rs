@@ -19,19 +19,18 @@ use core::{fmt, hash::Hash, mem};
 use hashbrown::HashMap;
 
 /// de bruijn index
-/// beware: IDs will be cloned often-ish
+/// beware: IDs will be cloned as often as terms
 pub trait IDtrt: Eq + Hash + Clone + fmt::Debug {}
 impl<T: Eq + Hash + Clone + fmt::Debug> IDtrt for T {}
 
 /// expression
-/// beware: IDs will be cloned often-ish
 #[derive(PartialEq, Eq, Clone)]
 pub enum Expr<ID: IDtrt> {
     /// rule; abstraction
     Rul{m:Box<Expr<ID>>, b:Box<Expr<ID>>},
     /// modus ponens; application
     Mod{f:Box<Expr<ID>>, x:Box<Expr<ID>>},
-    /// hypothesis; variable;; locally free variables are local axioms
+    /// hypothesis; variable; free variables are axioms
     Hyp(ID),
     /// tombstone; intermediate representation;
     /// placed in redex when it is to be dropped after this use
