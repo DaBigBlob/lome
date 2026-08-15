@@ -7,7 +7,7 @@ edition = "2021"
 rust-version = "1.75"
 license = "BSD-2-Clause"
 authors = ["Hans S. <hans@0x8.io>"]
-description = "Platform specific Human-Interfaces for Eta-Core"
+description = "Pure Type System implemented as Lambda-Typed-Lambda-Calculus implemented as Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
 repository = "https://github.com/DaBigBlob/eta-rs"
 readme = "README.md"
 
