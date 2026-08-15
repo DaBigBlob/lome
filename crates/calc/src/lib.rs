@@ -87,7 +87,7 @@ impl  <ID: IDtrt> fmt::Debug for Expr<ID> {
 pub struct Ctx<ID: IDtrt>(HashMap<ID, Expr<ID>>);
 impl <ID: IDtrt> Ctx<ID> {
     pub fn new() -> Self { Self(HashMap::new()) }
-    // we only clone id and v if they dont exist in map
+    /// return true if set (or pair present already) else false
     pub fn set(&mut self, id: ID, v: Expr<ID>) -> bool {
         match self.0.get(&id) {
             Some(exp) => {exp == &v},
@@ -139,6 +139,7 @@ impl <ID: IDtrt> Ctx<ID> {
     }
 }
 
+/// "[key = val; ...]"
 impl<ID: IDtrt> fmt::Debug for Ctx<ID> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("[")?;
