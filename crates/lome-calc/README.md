@@ -1,2 +1,2 @@
 # Lome Core Calculus
-Pattern Calculus with Call-by-Value and Pattern-Enforced-Equality
+Call-by-Value Pattern Calculus with Pattern-Enforced-Equality
