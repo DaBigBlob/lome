@@ -30,7 +30,7 @@ pub enum Expr<ID: IDtrt> {
     Rul{m:Box<Expr<ID>>, b:Box<Expr<ID>>},
     /// modus ponens; application
     Mod{f:Box<Expr<ID>>, x:Box<Expr<ID>>},
-    /// hypothesis; variable; free variables are axioms
+    /// hypothesis; variable; globally free variables are constructors
     Hyp(ID),
     /// tombstone; intermediate representation;
     /// placed in redex when it is to be dropped after this use
@@ -40,32 +40,32 @@ pub enum Expr<ID: IDtrt> {
 impl <ID: IDtrt> Expr<ID> {
     /// in-place normalize
     /// Ok() is good else bad; in ok, true is normalized else not
-    pub fn norm(&mut self) -> Result<bool, ()> {
-        match self {
-            Expr::Mod { f, x } => match f.as_mut() {
-                Expr::Rul { m, b } => {
-                    // norm m, x before match; success does not matter
-                    match (m.norm(), x.norm()) { // call-by-value
-                        (Ok(_), Ok(_)) => { // now match
-                            let mut map: IDMapExpr<ID> = IDMapExpr::new();
-                            match map.mtch(x, m) {
-                                true => {
-                                    *self = map.bound(b);
-                                    self.norm() // recur till Ok(false) or Err
-                                },
-                                false => Err(()), // did not match
-                            }
-                        }
-                        _ => Err(())
+    pub fn norm(&mut self, mut ctx:Ctx<ID>) -> Result<bool, ()> {
+    match self {
+        Expr::Mod { f, x } => match f.as_mut() {
+            Expr::Rul { m, b } => {
+            // norm m, x with cloned current context before match
+            match (m.norm(ctx.clone()), x.norm(ctx.clone())) { // call-by-value
+                (Ok(_), Ok(_)) => {
+                    let ctx_org = ctx.clone(); // keep unpolluted copy for after
+                    // now match
+                    match ctx.mtch(x, m) {
+                        true => { // now bind
+                            *self = ctx.bound(b);
+                            self.norm(ctx_org) // recur with unpolluted ctx till Ok(false) or Err
+                        },
+                        false => Err(()), // did not match
                     }
-                },
-                kf => match kf.norm() {
-                    Ok(true) => self.norm(), // self changed, retry
-                    x => x, // else forward; includes (hyp ...) as Ok(false)
                 }
+                _ => Err(())
+            }},
+            kf => match kf.norm(ctx.clone()) {
+                Ok(true) => self.norm(ctx), // self changed, retry
+                x => x, // else forward; includes (hyp ...) as Ok(false)
             }
-            _ => Ok(false) // nothing to do but okay
         }
+        _ => Ok(false) // nothing to do but okay
+    }
     }
 
     fn take(&mut self) -> Self {mem::replace(self, Expr::Taken)}
@@ -82,11 +82,13 @@ impl  <ID: IDtrt> fmt::Debug for Expr<ID> {
     }
 }
 
-struct IDMapExpr<ID: IDtrt>(HashMap<ID, Expr<ID>>);
-impl <ID: IDtrt> IDMapExpr<ID> {
+/// context; var -> val/ var -> type
+#[derive(Clone)]
+pub struct Ctx<ID: IDtrt>(HashMap<ID, Expr<ID>>);
+impl <ID: IDtrt> Ctx<ID> {
     pub fn new() -> Self { Self(HashMap::new()) }
     // we only clone id and v if they dont exist in map
-    fn set(&mut self, id: ID, v: Expr<ID>) -> bool {
+    pub fn set(&mut self, id: ID, v: Expr<ID>) -> bool {
         match self.0.get(&id) {
             Some(exp) => {exp == &v},
             None => {
@@ -95,6 +97,7 @@ impl <ID: IDtrt> IDMapExpr<ID> {
             }
         }
     }
+    pub fn get(&self, id:&ID) -> Option<&Expr<ID>> {self.0.get(id)}
     /// populates map with [xx/hol(mm)], replaces xx and hol(mm) with tombstone
     /// note: exp and m must be normalized individually before calling mtch;
     fn mtch(&mut self, xx:&mut Expr<ID>, mm:&mut Expr<ID>) -> bool {
@@ -127,11 +130,20 @@ impl <ID: IDtrt> IDMapExpr<ID> {
                 **x = self.bound(x);
                 bb.take()
             },
-            Expr::Hyp(id) => match self.0.get(id) {
+            Expr::Hyp(id) => match self.get(id) {
                 Some(ex) => ex.clone(),
-                None => bb.take(), // free variable
+                None => bb.take(), // globally free variable (not in context)
             }
             Expr::Taken => unreachable!() // converging + same branch is taken once
         }
+    }
+}
+
+impl<ID: IDtrt> fmt::Debug for Ctx<ID> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[")?;
+        self.0.iter()
+        .try_for_each(|(k, v)| write!(f, "{k:?} = {v:?}; "))?;
+        f.write_str("]")
     }
 }
