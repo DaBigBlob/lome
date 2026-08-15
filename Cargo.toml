@@ -2,6 +2,10 @@
 resolver = "2"
 members = ["crates/calc", "crates/lang"]
 
+[workspace.dependencies]
+lome-calc = { version = "0.1.0", path = "crates/calc" }
+lome-lang = { version = "0.1.0", path = "crates/lang" }
+
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
@@ -11,10 +15,6 @@ authors = ["Hans S. <hans@0x8.io>"]
 description = "Lome: Pure Type System implemented as Lambda-Typed-Lambda-Calculus implemented as Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
 repository = "https://github.com/DaBigBlob/lome"
 readme = "README.md"
-
-[workspace.dependencies]
-lome-calc = { version = "0.1.0", path = "crates/calc" }
-lome-lang = { version = "0.1.0", path = "crates/lang" }
 
 # --release
 [profile.release]
