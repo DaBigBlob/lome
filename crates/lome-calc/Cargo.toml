@@ -1,11 +1,12 @@
 [package]
 name = "lome-calc"
-description = "# Lome Core Calculus Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
+description = "Lome Core Calculus: Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-authors = ["Hans S. <hans@0x8.io>"]
+authors.workspace = true
+repository.workspace = true
 readme = "README.md"
 
 [dependencies]

@@ -1,1 +1,1 @@
-# Lome Language
+# Lome Core Language

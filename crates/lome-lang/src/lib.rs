@@ -1,14 +1,13 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+#![no_std]
+#![deny(
+    unsafe_op_in_unsafe_fn,
+    clippy::panic,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::todo,
+    clippy::unreachable,
+    clippy::unimplemented,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::undocumented_unsafe_blocks,
+)]
