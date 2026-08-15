@@ -1,7 +1,7 @@
 [package]
 name = "lome-calc"
 description = "Lome Core Calculus: Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

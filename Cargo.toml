@@ -12,8 +12,8 @@ repository = "https://github.com/DaBigBlob/lome"
 readme = "README.md"
 
 [workspace.dependencies]
-lome-calc = { path = "crates/lome-calc" }
-lome-lang = { path = "crates/lome-lang" }
+lome-calc = { version = "0.1.0", path = "crates/calc" }
+lome-lang = { version = "0.1.0", path = "crates/lang" }
 
 # --release
 [profile.release]
