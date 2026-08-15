@@ -11,6 +11,7 @@
     clippy::undocumented_unsafe_blocks,
 )]
 #![allow(clippy::unreachable)]
+#![allow(clippy::result_unit_err)]
 
 extern crate alloc;
 use alloc::boxed::Box;

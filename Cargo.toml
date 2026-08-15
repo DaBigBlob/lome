@@ -3,8 +3,8 @@ resolver = "2"
 members = ["crates/lome-calc", "crates/lome-lang"]
 
 [workspace.package]
-edition = "2021"
-rust-version = "1.75"
+edition = "2024"
+rust-version = "1.85"
 license = "BSD-3-Clause"
 authors = ["Hans S. <hans@0x8.io>"]
 description = "Lome: Pure Type System implemented as Lambda-Typed-Lambda-Calculus implemented as Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
