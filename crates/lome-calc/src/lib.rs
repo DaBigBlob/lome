@@ -15,13 +15,13 @@
 
 extern crate alloc;
 use alloc::boxed::Box;
-use core::{hash::Hash, mem};
+use core::{fmt, hash::Hash, mem};
 use hashbrown::HashMap;
 
 /// de bruijn index
 /// beware: IDs will be cloned often-ish
-pub trait IDtrt: Eq + Hash + Clone {}
-impl<T: Eq + Hash + Clone> IDtrt for T {}
+pub trait IDtrt: Eq + Hash + Clone + fmt::Debug {}
+impl<T: Eq + Hash + Clone + fmt::Debug> IDtrt for T {}
 
 /// expression
 /// beware: IDs will be cloned often-ish
@@ -70,6 +70,17 @@ impl <ID: IDtrt> Expr<ID> {
     }
 
     fn take(&mut self) -> Self {mem::replace(self, Expr::Taken)}
+}
+
+impl  <ID: IDtrt> fmt::Debug for Expr<ID> {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Rul { m, b } => write!(fmt, "({m:?}) -> ({b:?})"),
+            Self::Mod { f, x } => write!(fmt, "({f:?}) ({x:?})"),
+            Self::Hyp(id) => write!(fmt, "{id:?}"),
+            Self::Taken => write!(fmt, "<TAKEN>"),
+        }
+    }
 }
 
 struct IDMapExpr<ID: IDtrt>(HashMap<ID, Expr<ID>>);
