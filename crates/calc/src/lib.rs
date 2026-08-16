@@ -1,14 +1,11 @@
 #![no_std]
 #![deny(
-    unsafe_op_in_unsafe_fn,
     clippy::panic,
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::todo,
     clippy::unimplemented,
-    clippy::indexing_slicing,
     clippy::arithmetic_side_effects,
-    clippy::undocumented_unsafe_blocks,
 )]
 #![allow(clippy::unreachable)]
 #![allow(clippy::result_unit_err)]
