@@ -9,11 +9,11 @@
     clippy::unreachable
 )]
 
-use lome_calc::*;
+// use lome_calc::*;
 
-/// extended expression
-pub struct STmt<ID: IDtrt> {id:ID, exp:Expr<ID>}
+// /// extended expression
+// pub struct STmt<ID: IDtrt> {id:ID, exp:Expr<ID>}
 
-pub fn lol<ID: IDtrt>() {
-    let a: Ctx<ID> = lome_calc::Ctx::new();
-}
+// pub fn lol<ID: IDtrt>() {
+//     let a: Ctx<ID> = lome_calc::Ctx::new();
+// }

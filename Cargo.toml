@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/calc", "crates/lang"]
+members = ["crates/calc", "crates/lang", "crates/modus"]
 
 [workspace.dependencies]
+lome-modus = { version = "0.1.0", path = "crates/modus" }
 lome-calc = { version = "0.1.0", path = "crates/calc" }
 lome-lang = { version = "0.1.0", path = "crates/lang" }
 

@@ -54,8 +54,7 @@ pub trait Executor: Sync {
     >(&'a self, task: Self::Task<'a, T>) -> T;
 }
 
-
-impl <O: Object> Expr<O> {
+impl <O: Object + Send> Expr<O> {
     /// Ok: Completely normalizez to a single Object.
     ///
     /// Err: Returns the A.apply(B) which failed as Expr::Mod(Box::new((A, B)).
@@ -89,8 +88,8 @@ impl <O: Object + fmt::Debug> fmt::Debug for Expr<O> {
         match self {
             Expr::Obj(o) => write!(f, "{o:?}"),
             Expr::Mod(ee) => {
-                let op = &(*ee).1;
-                let x = &(*ee).0;
+                let op = &(*ee).0;
+                let x = &(*ee).1;
                 write!(f, "({op:?}) ({x:?})")
             },
         }
@@ -98,12 +97,13 @@ impl <O: Object + fmt::Debug> fmt::Debug for Expr<O> {
 }
 
 unsafe impl <O: Object + Send> Send for Expr<O> {}
+unsafe impl <O: Object + Sync> Sync for Expr<O> {}
 
 impl <O: Object + Clone> Clone for Expr<O> {
     fn clone(&self) -> Self {
         match self {
-            Self::Obj(arg0) => Self::Obj(arg0.clone()),
-            Self::Mod(arg0) => Self::Mod(arg0.clone()),
+            Self::Obj(o) => Self::Obj(o.clone()),
+            Self::Mod(bee) => Self::Mod(bee.clone()),
         }
     }
 }
