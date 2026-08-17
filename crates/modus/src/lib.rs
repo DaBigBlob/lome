@@ -35,14 +35,14 @@ pub enum Expr<O: Object> {
 pub trait Executor: Sync {
     type Task<'a, T: Send + 'a>: 'a
         where Self: 'a;
-    /// Create a task for multiprocessing.
+    /// Essentially Spawn.
     ///
     /// Note for implementor: If you intend to circumvent multiprocessing,
     /// only store computation:F using this function.
     fn task<'a, T: Send + 'a, F: FnOnce() -> T + Send + 'a>
     (&'a self, computation: F) -> Self::Task<'a, T>;
 
-    /// Wait till the task is completed by whoever was executing the task.
+    /// Essentially Join.
     ///
     /// Note for implementor: If you intend to circumvent multiprocessing,
     /// run computation:F using this function.
@@ -70,15 +70,16 @@ pub mod default {
 }
 
 impl <O: Object> Expr<O> {
-    /// Ok: Completely normalizez to a single Object.
+    /// Non-recursive, multiprocessing-ready normalization.
     ///
+    /// Ok: Completely normalizez to a single Object.
     /// Err: Returns the A.apply(B) which failed as Expr::Mod(Box::new((A, B)).
     pub fn norm<Exec: Executor>(self, exec:&Exec) -> Result<O, Expr<O>> {
-        let mut args = Vec::new();
+        let mut right = Vec::new();
         let mut exp = self;
         loop {
             match exp {
-                Expr::Obj(op) => match args.pop() {
+                Expr::Obj(op) => match right.pop() {
                     Some(task) => match exec.complete(task) {
                         Ok(x) => match op.apply(x) {
                             Ok(exp_) => {exp = exp_;}, // loop continue
@@ -90,7 +91,7 @@ impl <O: Object> Expr<O> {
                 }
                 Expr::Mod(bee) => {
                     let ee = *bee;
-                    args.push(exec.task(move || ee.1.norm(exec)));
+                    right.push(exec.task(move || ee.1.norm(exec)));
                     exp = ee.0;
                 },
             }
@@ -103,10 +104,9 @@ impl <O: Object + fmt::Debug> fmt::Debug for Expr<O> {
         match self {
             Expr::Obj(o) => write!(f, "{o:?}"),
             Expr::Mod(ee) => {
-                let op = &(*ee).0;
-                let x = &(*ee).1;
+                let (op, x) = ee.as_ref();
                 write!(f, "({op:?}) ({x:?})")
-            },
+            }
         }
     }
 }
