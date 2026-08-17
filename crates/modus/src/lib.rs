@@ -14,7 +14,7 @@ extern crate alloc;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 
-pub trait Object:  Sized {
+pub trait Object: Sized + Send {
     /// Override this if the object is an operator.
     /// A default implementation as non-operator is provided.
     ///
@@ -39,22 +39,37 @@ pub trait Executor: Sync {
     ///
     /// Note for implementor: If you intend to circumvent multiprocessing,
     /// only store computation:F using this function.
-    fn task<
-        'a,
-        T: Send + 'a,
-        F: FnOnce() -> T + Send + 'a,
-    >(&'a self, computation: F) -> Self::Task<'a, T>;
+    fn task<'a, T: Send + 'a, F: FnOnce() -> T + Send + 'a>
+    (&'a self, computation: F) -> Self::Task<'a, T>;
+
     /// Wait till the task is completed by whoever was executing the task.
     ///
     /// Note for implementor: If you intend to circumvent multiprocessing,
     /// run computation:F using this function.
-    fn complete<
-        'a,
-        T: Send + 'a,
-    >(&'a self, task: Self::Task<'a, T>) -> T;
+    fn complete<'a, T: Send + 'a>
+    (&'a self, task: Self::Task<'a, T>) -> T;
 }
 
-impl <O: Object + Send> Expr<O> {
+pub mod default {
+    use alloc::boxed::Box;
+
+    /// Very cheap serial executor that still minimizes stack overheads.
+    #[derive(Clone, Copy, Debug)]
+    pub struct Executor;
+
+    impl crate::Executor for Executor {
+        type Task<'a, T: Send + 'a> = Box<dyn FnOnce() -> T + Send + 'a>
+            where Self: 'a;
+
+        fn task<'a, T: Send + 'a, F: FnOnce() -> T + Send + 'a>
+        ( &'a self, computation: F) -> Self::Task<'a, T> {Box::new(computation)}
+
+        fn complete<'a, T: Send + 'a>
+        (&'a self, task: Self::Task<'a, T>) -> T {task()}
+    }
+}
+
+impl <O: Object> Expr<O> {
     /// Ok: Completely normalizez to a single Object.
     ///
     /// Err: Returns the A.apply(B) which failed as Expr::Mod(Box::new((A, B)).
