@@ -96,9 +96,6 @@ impl <O: Object + fmt::Debug> fmt::Debug for Expr<O> {
     }
 }
 
-unsafe impl <O: Object + Send> Send for Expr<O> {}
-unsafe impl <O: Object + Sync> Sync for Expr<O> {}
-
 impl <O: Object + Clone> Clone for Expr<O> {
     fn clone(&self) -> Self {
         match self {
