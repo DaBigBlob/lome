@@ -14,15 +14,21 @@
 
 extern crate alloc;
 use alloc::boxed::Box;
-
-use crate::executor::Executor;
+use executor::Executor;
+use norm::FrameQ;
 
 pub trait Object: Sized {
-    /// apply() may fail, but what is means to fail is semantics local to the
+    /// 1. apply() may fail, but what is means to fail is semantics local to the
     /// implementor - just like what false or absurdity is at the foundations
     /// of mathematics. The implementor must agree with himself on that meaning.
     /// We, on our side, simply do not - and should not - care.
-    /// If Tree::Brc(Branch{l:op, r:x}) is returned, we naively re-apply.
+    ///
+    /// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Obj(op), r:Tree::Obj(x)}))`
+    /// is returned, we naively re-apply.
+    ///
+    /// 3. apply is assumed to be pure. Whether its actually pure is up to
+    /// implementation - in-fact many times impurity is desired - but that
+    /// is again up to the implementor.
     fn apply(self, x: Self) -> Tree<Self>;
 }
 
@@ -46,7 +52,7 @@ impl <O: Object> From<(Tree<O>, Tree<O>)> for Tree<O> {
 pub struct Branch<O: Object> { l: Tree<O>, r: Tree<O> }
 impl <O: Object> Branch<O> {
     pub fn norm<E: Executor>(self, exec:&E) -> O {
-        let mut frm = norm::FrameQ::new(self, exec);
+        let mut frm = FrameQ::new(self, exec);
         frm.expand(exec);
         frm.reduce(exec)
     }
@@ -109,6 +115,8 @@ mod norm {
                 }
             }
 
+            /// Requires the selected slot to be `None` - i.e. only be called
+            /// from a child not lying about its parent.
             pub(super) fn fill_slot(&mut self, right:bool, obj:O, exec:&'a E) {
                 match self {
                     InFrame::Hold { l, r } => {
