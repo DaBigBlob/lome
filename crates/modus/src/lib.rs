@@ -19,16 +19,16 @@ use norm::FrameQ;
 
 pub trait Object: Sized {
     /// 1. apply() may fail, but what is means to fail is semantics local to the
-    /// implementor - just like what false or absurdity is at the foundations
-    /// of mathematics. The implementor must agree with himself on that meaning.
-    /// We, on our side, simply do not - and should not - care.
+    ///    implementor - just like what false or absurdity is at the foundations
+    ///    of mathematics. The implementor must agree with himself on that meaning.
+    ///    We, on our side, simply do not - and should not - care.
     ///
     /// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Obj(op), r:Tree::Obj(x)}))`
-    /// is returned, we naively re-apply.
+    ///    is returned, we naively re-apply.
     ///
     /// 3. apply is assumed to be pure. Whether its actually pure is up to
-    /// implementation - in-fact many times impurity is desired - but that
-    /// is again up to the implementor.
+    ///    implementation - in-fact many times impurity is desired - but that
+    ///    is again up to the implementor.
     fn apply(self, x: Self) -> Tree<Self>;
 }
 
