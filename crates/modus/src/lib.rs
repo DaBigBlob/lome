@@ -9,7 +9,7 @@
 #![allow(
     clippy::unreachable,
     clippy::arithmetic_side_effects,
-    clippy::vec_init_then_push
+    clippy::single_match
 )]
 
 extern crate alloc;
@@ -49,7 +49,7 @@ impl <O: Object> From<(Tree<O>, Tree<O>)> for Branch<O> {
     fn from(value: (Tree<O>, Tree<O>)) -> Self {Self{l:value.0, r:value.1}}
 }
 impl <O: Object> Branch<O> {
-    pub fn norm<'a, E: Executor>(self, exec:&'a E) -> O {
+    pub fn norm<E: Executor>(self, exec:&E) -> O {
         let mut frm = norm::FrameQ::new(self, exec);
         frm.expand(exec);
         frm.reduce(exec)
