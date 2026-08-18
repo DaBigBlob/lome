@@ -9,7 +9,8 @@
 #![allow(
     clippy::unreachable,
     clippy::arithmetic_side_effects,
-    clippy::single_match
+    clippy::single_match,
+    clippy::explicit_auto_deref
 )]
 
 extern crate alloc;
