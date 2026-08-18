@@ -146,12 +146,7 @@ mod norm {
                 (slot: &mut Option<Tree<Leaf>>, ator:&A) -> Option<InFrame<Leaf, A>> {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
-                            Some(Tree::Brc(b)) => {
-                                let mut inf = InFrame::Hold((Some(b.0), Some(b.1)));
-                                inf.try_task(ator);
-                                // ensure FrameQ-propr-post-expand-done-in
-                                Some(inf)
-                            },
+                            Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
                             _ => unreachable!(),
                         },
                         _ => None,
@@ -239,11 +234,26 @@ mod norm {
         pub(super) fn reduce(&mut self, ator:&A) -> Leaf {
             self.expand(ator);
 
-            while let Some(Frame {
-                src,
-                innr:InFrame::Task(tsk)
-            }) = self.0.pop() { // by FrameQ-propr-post-expand-OO-pop
-                match ator.completed(tsk) {
+            // while let Some(Frame {
+            //     src,
+            //     innr:InFrame::Task(tsk)
+            // }) = self.0.pop() { // by FrameQ-propr-post-expand-OO-pop
+            //     match ator.completed(tsk) {
+            //         Tree::Lea(o) => match src {
+            //             Some(rf)
+            //             => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
+            //             None => return o, // elim FrameQ-propr-min-1
+            //         },
+            //         Tree::Brc(b) => {
+            //             self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
+            //             // emlim FrameQ-propr-post-expand-OO-pop
+            //             self.expand(ator);
+            //             // intro FrameQ-propr-post-expand-OO-pop
+            //         },
+            //     }
+            // }
+            while let Some(Frame {src, innr}) = self.0.pop() {match innr {
+                InFrame::Task(tsk) => match ator.completed(tsk) {
                     Tree::Lea(o) => match src {
                         Some(rf)
                         => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
@@ -255,9 +265,10 @@ mod norm {
                         self.expand(ator);
                         // intro FrameQ-propr-post-expand-OO-pop
                     },
-                }
-            }
-            unreachable!() // by FrameQ-propr-post-expand-OO-pop
+                },
+                _ => unreachable!(), // by FrameQ-propr-post-expand-OO-pop
+            }}
+            unreachable!() // by FrameQ-propr-min-1
         }
     }
 }
