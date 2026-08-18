@@ -17,7 +17,7 @@ use alloc::boxed::Box;
 
 use crate::exec::Executor;
 
-pub trait Object: Sized + Send {
+pub trait Object: Sized {
     /// apply may fail, but what is means to fail is semantics local to the
     /// implementor - just like what false or absurdity is at the foundations
     /// of mathematics. The implementor must agree with himself on that meaning.
