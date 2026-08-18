@@ -15,25 +15,22 @@
 extern crate alloc;
 use alloc::boxed::Box;
 
-use crate::exec::Executor;
+use crate::executor::Executor;
 
 pub trait Object: Sized {
-    /// apply may fail, but what is means to fail is semantics local to the
+    /// apply() may fail, but what is means to fail is semantics local to the
     /// implementor - just like what false or absurdity is at the foundations
     /// of mathematics. The implementor must agree with himself on that meaning.
     /// We, on our side, simply do not - and should not - care.
+    /// If Tree::Brc(Branch{l:op, r:x}) is returned, we naively re-apply.
     fn apply(self, x: Self) -> Tree<Self>;
 }
 
 /// Expression
 pub enum Tree<O: Object> {
-    /// Opaque Object
+    /// Leaf
     Obj(O),
-    // We use box here for indirection instead of in Branch because
-    // if Object is small, we would be wasting less space with relatively
-    // small box (approx 1 pointer size) instead of holding at least two
-    // pointer sizes.
-    /// Modus Ponens
+    /// Branch
     Brc(Box<Branch<O>>)
 }
 impl <O: Object> From<O> for Tree<O> {
@@ -55,7 +52,7 @@ impl <O: Object> Branch<O> {
     }
 }
 
-pub mod exec {
+pub mod executor {
     pub trait Executor {
         type Task<'a, T: 'a>: 'a
             where Self: 'a;
@@ -70,109 +67,127 @@ pub mod exec {
 }
 
 mod norm {
-    use alloc::vec::Vec;
-    use crate::{Branch, Object, Tree, exec::Executor};
+    mod frame {
+        use crate::{Branch, Object, Tree, executor::Executor};
 
-    enum InFrame<'a, O: Object + 'a, E: Executor + 'a>{
-        Task(E::Task<'a, Tree<O>>),
-        Hold{l:Option<Tree<O>>, r:Option<Tree<O>>}
-    }
-    impl <'a, O: Object, E: Executor> InFrame<'a, O, E> {
-        fn try_task(&mut self, exec:&'a E) {
-            match self {
-                InFrame::Hold { l, r }
-                => match (&*l, &*r) {
-                    (
-                        Some(Tree::Obj(_)),
-                        Some(Tree::Obj(_))
-                    ) => match (l.take(), r.take()) {
+        /// DO NOT CONTSRUCT RAW: use InFrame::new()
+        pub(super) enum InFrame<'a, O: Object + 'a, E: Executor + 'a>{
+            Task(E::Task<'a, Tree<O>>),
+            Hold{l:Option<Tree<O>>, r:Option<Tree<O>>}
+        }
+        impl <'a, O: Object, E: Executor> InFrame<'a, O, E> {
+            pub(super) fn new(b: Branch<O>, exec:&'a E) -> Self {
+                let mut innr = InFrame::Hold{l:Some(b.l), r:Some(b.r)};
+                innr.try_task(exec);
+                innr
+            }
+        }
+        impl <'a, O: Object, E: Executor> InFrame<'a, O, E> {
+            /// not to be used outside of InFrame
+            fn try_task(&mut self, exec:&'a E) {
+                match self {
+                    InFrame::Hold { l, r }
+                    => match (&*l, &*r) {
                         (
-                            Some(Tree::Obj(op)),
-                            Some(Tree::Obj(x))
-                        ) => {
-                            *self = Self::Task(exec.task(
-                                move || op.apply(x)
-                            ));
+                            Some(Tree::Obj(_)),
+                            Some(Tree::Obj(_))
+                        ) => match (l.take(), r.take()) {
+                            (
+                                Some(Tree::Obj(op)),
+                                Some(Tree::Obj(x))
+                            ) => {
+                                *self = Self::Task(exec.task(
+                                    move || op.apply(x)
+                                ));
+                            },
+                            _ => unreachable!()
                         },
-                        _ => unreachable!()
+                        _ => ()
                     },
-                    _ => ()
-                },
-                // never produced children
-                InFrame::Task(_) => (),
-            }
-        }
-
-        fn fill_slot(&mut self, right:bool, obj:O) {
-            match self {
-                InFrame::Hold { l, r } => {
-                    if right {*r = Some(Tree::Obj(obj))}
-                    else     {*l = Some(Tree::Obj(obj))}
-                },
-                // never produced children
-                InFrame::Task(_) => unreachable!(),
-            }
-        }
-
-        /// caller must assert `self_idx` is index of this frame.
-        fn children(&mut self) -> (Option<Self>, Option<Self>) {
-
-            fn take_slot<'a, O: Object, E: Executor>
-            (slot: &mut Option<Tree<O>>) -> Option<InFrame<'a, O, E>> {
-                match &*slot {
-                    Some(Tree::Brc(_)) => match slot.take() {
-                        Some(Tree::Brc(b)) => Some(InFrame::Hold{
-                            l:Some(b.l),
-                            r:Some(b.r)
-                        }),
-                        _ => unreachable!(),
-                    },
-                    _ => None,
+                    // never produced children
+                    InFrame::Task(_) => (),
                 }
             }
 
-            match self {
-                InFrame::Task(_) => (None, None),
-                InFrame::Hold { l, r } => (
-                    take_slot(l),
-                    take_slot(r)
-                )
+            pub(super) fn fill_slot(&mut self, right:bool, obj:O, exec:&'a E) {
+                match self {
+                    InFrame::Hold { l, r } => {
+                        if right {*r = Some(Tree::Obj(obj))}
+                        else     {*l = Some(Tree::Obj(obj))}
+                        // elim FrameQ-propr-post-expand-done-in
+                        self.try_task(exec);
+                        // intro FrameQ-propr-post-expand-done-in
+                    },
+                    // never produced children
+                    InFrame::Task(_) => unreachable!(),
+                }
             }
+
+            pub(super) fn children(&mut self, exec:&'a E) -> (Option<Self>, Option<Self>) {
+
+                fn take_slot<'a, O: Object, E: Executor>
+                (slot: &mut Option<Tree<O>>, exec:&'a E) -> Option<InFrame<'a, O, E>> {
+                    match &*slot {
+                        Some(Tree::Brc(_)) => match slot.take() {
+                            Some(Tree::Brc(b)) => {
+                                let mut inf = InFrame::Hold{
+                                    l:Some(b.l),
+                                    r:Some(b.r)
+                                };
+                                inf.try_task(exec);
+                                // ensure FrameQ-propr-post-expand-done-in
+                                Some(inf)
+                            },
+                            _ => unreachable!(),
+                        },
+                        _ => None,
+                    }
+                }
+
+                match self {
+                    InFrame::Task(_) => (None, None),
+                    InFrame::Hold { l, r } => (
+                        take_slot(l, exec),
+                        take_slot(r, exec)
+                    )
+                }
+            }
+        }
+
+        pub(super) struct Frame<'a, O: Object, E: Executor> {
+            pub(super) src: Option<(usize, bool)>, // (parent_index, slot_is_right)
+            pub(super) innr: InFrame<'a, O, E>
         }
     }
 
-    struct Frame<'a, O: Object, E: Executor> {
-        src: Option<(usize, bool)>, // (parent_index, slot_is_right)
-        innr: InFrame<'a, O, E>
-    }
+    use alloc::vec::Vec;
+    use crate::{Branch, Object, Tree, executor::Executor};
+    use frame::{Frame, InFrame};
 
     // properties:
     //  - FrameQ-propr-min-1
     //  - FrameQ-propr-post-expand-OO-pop
+    //  - FrameQ-propr-post-expand-done-in
     // idiom for push: try_task -> push
-    pub struct FrameQ<'a, O: Object, E: Executor>
+    pub(super) struct FrameQ<'a, O: Object, E: Executor>
     (Vec<Frame<'a, O, E>>);
 
     impl <'a, O: Object, E: Executor> FrameQ<'a, O, E> {
-        pub fn new(b: Branch<O>, exec:&'a E) -> Self {
+        pub(super) fn new(b: Branch<O>, exec:&'a E) -> Self {
             let mut q = Vec::new();
-            let mut innr = InFrame::Hold{l:Some(b.l), r:Some(b.r)};
-            innr.try_task(exec);
-            q.push(Frame {src:None, innr});
+            q.push(Frame{ src:None, innr:InFrame::new(b, exec) });
             // intro FrameQ-propr-min-1
             Self(q)
         }
 
-        pub fn expand(&mut self, exec:&'a E) {
+        pub(super) fn expand(&mut self, exec:&'a E) {
             let mut idx = self.0.len() - 1; // by FrameQ-propr-min-1
             while idx < self.0.len() {
-                let (lc, rc) = self.0[idx].innr.children();
-                if let Some(mut innr) = lc {
-                    innr.try_task(exec);
+                let (lc, rc) = self.0[idx].innr.children(exec);
+                if let Some(innr) = lc {
                     self.0.push(Frame{src:Some((idx, false)), innr});
                 }
-                if let Some(mut innr) = rc {
-                    innr.try_task(exec);
+                if let Some(innr) = rc {
                     self.0.push(Frame{src:Some((idx, true)), innr});
                 }
                 idx += 1;
@@ -180,7 +195,7 @@ mod norm {
             // intro FrameQ-propr-post-expand-OO-pop
         }
 
-        pub fn reduce(&mut self, exec:&'a E) -> O {
+        pub(super) fn reduce(&mut self, exec:&'a E) -> O {
             while let Some(Frame {
                 src,
                 innr:InFrame::Task(tsk)
@@ -188,13 +203,11 @@ mod norm {
                 match exec.complete(tsk) {
                     Tree::Obj(o) => match src {
                         Some((idx, right))
-                            => self.0[idx].innr.fill_slot(right, o),
+                            => self.0[idx].innr.fill_slot(right, o, exec),
                         None => return o, // elim FrameQ-propr-min-1
                     },
                     Tree::Brc(b) => {
-                        let mut innr = InFrame::Hold {l:Some(b.l), r:Some(b.r)};
-                        innr.try_task(exec);
-                        self.0.push(Frame {src, innr});
+                        self.0.push(Frame {src, innr:InFrame::new(*b, exec)});
                         // emlim FrameQ-propr-post-expand-OO-pop
                         self.expand(exec);
                         // intro FrameQ-propr-post-expand-OO-pop
