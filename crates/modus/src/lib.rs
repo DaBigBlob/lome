@@ -20,11 +20,10 @@ use norm::FrameQ;
 /// 1. ApplicatorTask may fail, but what is means to fail is semantics local
 ///    to the implementor - just like what false or absurdity is at the
 ///    foundations of mathematics. The implementor must agree with himself
-///    on that meaning. We, on our side, simply do not - and should not - care.
-///
+///    on that meaning.
+    // We, on our side, simply do not - and should not - care.
 /// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Obj(op), r:Tree::Obj(x)}))`
-///    is returned by completed(), we naively re-apply.
-///
+///    is returned by completed(), is it naively re-apply-ed.
 /// 3. LeafApplicator is assumed to be pure. Whether its actually pure
 ///    is up to implementation - in-fact many times impurity is desired
 ///    - but that is again up to the implementor.
@@ -38,7 +37,7 @@ pub trait LeafApplicator<Leaf> {
     fn completed(&self, task: Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
-/// Expression
+/// Principal Expression
 pub enum Tree<Leaf> {
     /// Leaf
     Lea(Leaf),
@@ -73,7 +72,7 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
     }
 }
 
-/// Principal Expression i.e. Modus Ponenes
+/// Essentially Modus Ponens
 pub struct Branch<Leaf> { l: Tree<Leaf>, r: Tree<Leaf> }
 impl <Leaf> Branch<Leaf> {
     pub fn norm<A: LeafApplicator<Leaf>>(self, applicator:&A) -> Leaf {
