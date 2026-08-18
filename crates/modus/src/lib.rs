@@ -23,7 +23,7 @@ use norm::FrameQ;
 ///    foundations of mathematics. The implementor must agree with himself
 ///    on that meaning.
     // We, on our side, simply do not - and should not - care.
-/// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Obj(op), r:Tree::Obj(x)}))`
+/// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Lea(op), r:Tree::Lea(x)}))`
 ///    is returned by completed(), is it naively re-apply-ed.
 /// 3. LeafApplicator is assumed to be pure. Whether its actually pure
 ///    is up to implementation - in-fact many times impurity is desired
