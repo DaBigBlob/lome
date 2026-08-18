@@ -18,40 +18,25 @@ use alloc::boxed::Box;
 use executor::Executor;
 use norm::FrameQ;
 
-pub trait Object: Sized + Send + 'static {
-    /// 1. apply() may fail, but what is means to fail is semantics local to the
-    ///    implementor - just like what false or absurdity is at the foundations
-    ///    of mathematics. The implementor must agree with himself on that meaning.
-    ///    We, on our side, simply do not - and should not - care.
-    ///
-    /// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Obj(op), r:Tree::Obj(x)}))`
-    ///    is returned, we naively re-apply.
-    ///
-    /// 3. apply is assumed to be pure. Whether its actually pure is up to
-    ///    implementation - in-fact many times impurity is desired - but that
-    ///    is again up to the implementor.
-    fn apply(self, x: Self) -> Tree<Self>;
-}
-
 /// Expression
-pub enum Tree<O: Object> {
+pub enum Tree<Leaf> {
     /// Leaf
-    Obj(O),
+    Lea(Leaf),
     /// Branch
-    Brc(Box<Branch<O>>)
+    Brc(Box<Branch<Leaf>>)
 }
-impl <O: Object> From<O> for Tree<O> {
-    fn from(value: O) -> Self {Self::Obj(value)}
+impl <Leaf> From<Leaf> for Tree<Leaf> {
+    fn from(value: Leaf) -> Self {Self::Lea(value)}
 }
-impl <O: Object> From<(Tree<O>, Tree<O>)> for Tree<O> {
-    fn from(value: (Tree<O>, Tree<O>)) -> Self {
+impl <Leaf> From<(Tree<Leaf>, Tree<Leaf>)> for Tree<Leaf> {
+    fn from(value: (Tree<Leaf>, Tree<Leaf>)) -> Self {
         Self::Brc(Box::new(Branch{l:value.0, r:value.1}))
     }
 }
-impl <O: Object + fmt::Debug> fmt::Debug for Tree<O> {
+impl <Leaf: fmt::Debug> fmt::Debug for Tree<Leaf> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Tree::Obj(o) => write!(f, "{o:?}"),
+            Tree::Lea(o) => write!(f, "{o:?}"),
             Tree::Brc(bb) => {
                 let (op, x) = (&(*bb).l, &(*bb).r);
                 write!(f, "({op:?}) ({x:?})")
@@ -59,76 +44,71 @@ impl <O: Object + fmt::Debug> fmt::Debug for Tree<O> {
         }
     }
 }
-impl <O: Object + Clone> Clone for Tree<O> {
+impl <Leaf: Clone> Clone for Tree<Leaf> {
     fn clone(&self) -> Self {
         match self {
-            Self::Obj(o) => Self::Obj(o.clone()),
+            Self::Lea(o) => Self::Lea(o.clone()),
             Self::Brc(bb) => Self::Brc(bb.clone()),
         }
     }
 }
 
 /// Principal Expression i.e. Modus Ponenes
-pub struct Branch<O: Object> { l: Tree<O>, r: Tree<O> }
-impl <O: Object> Branch<O> {
-    pub fn norm<E: Executor>(self, exec:&E) -> O {
+pub struct Branch<Leaf> { l: Tree<Leaf>, r: Tree<Leaf> }
+impl <Leaf> Branch<Leaf> {
+    pub fn norm<E: Executor<Leaf>>(self, exec:&E) -> Leaf {
         let mut frm = FrameQ::new(self, exec);
         frm.reduce(exec)
     }
 }
-impl <O: Object + Clone> Clone for Branch<O> {
+impl <Leaf: Clone> Clone for Branch<Leaf> {
     fn clone(&self) -> Self {Self{l:self.l.clone(), r:self.r.clone()}}
 }
 
 pub mod executor {
-    pub trait Executor {
-        // Task (handle) is kept on the main dependency resolution thread
-        // so no need for Send.
-        type Task<T: Send + 'static>;
+    use crate::Tree;
+    pub trait Executor<Leaf> {
+        type Task;
 
         /// Submit a computation (to perhaps another thread).
-        fn task<T: Send + 'static, F: FnOnce() -> T + Send + 'static>
-        (&self, computation: F) -> Self::Task<T>;
+        fn apply(&self, operator:Leaf, operand:Leaf) -> Self::Task;
 
         /// Wait for and obtain its result.
-        fn complete<T: Send + 'static>
-        (&self, task: Self::Task<T>) -> T;
+        fn completed(&self, task: Self::Task) -> Tree<Leaf>;
     }
 }
 
 mod norm {
     mod frame {
-        use crate::{Branch, Object, Tree, executor::Executor};
+        use crate::{Branch, Tree, executor::Executor};
 
         /// DO NOT CONTSRUCT RAW: use InFrame::new()
-        pub(super) enum InFrame<O: Object, E: Executor>{
-            Task(E::Task<Tree<O>>),
-            Hold{l:Option<Tree<O>>, r:Option<Tree<O>>}
+        pub(super) enum InFrame<Leaf, E: Executor<Leaf>>{
+            Task(E::Task),
+            Hold{l:Option<Tree<Leaf>>, r:Option<Tree<Leaf>>}
         }
-        impl <O: Object, E: Executor> InFrame<O, E> {
-            pub(super) fn new(b: Branch<O>, exec:&E) -> Self {
+        impl <Leaf, E: Executor<Leaf>> InFrame<Leaf, E> {
+            pub(super) fn new(b: Branch<Leaf>, exec:&E) -> Self {
                 let mut innr = InFrame::Hold{l:Some(b.l), r:Some(b.r)};
                 innr.try_task(exec);
                 innr
             }
         }
-        impl <O: Object, E: Executor> InFrame<O, E> {
+        impl <Leaf, E: Executor<Leaf>> InFrame<Leaf, E> {
             /// not to be used outside of InFrame
             fn try_task(&mut self, exec:&E) {
                 match self {
                     InFrame::Hold { l, r }
                     => match (&*l, &*r) {
                         (
-                            Some(Tree::Obj(_)),
-                            Some(Tree::Obj(_))
+                            Some(Tree::Lea(_)),
+                            Some(Tree::Lea(_))
                         ) => match (l.take(), r.take()) {
                             (
-                                Some(Tree::Obj(op)),
-                                Some(Tree::Obj(x))
+                                Some(Tree::Lea(op)),
+                                Some(Tree::Lea(x))
                             ) => {
-                                *self = Self::Task(exec.task(
-                                    move || op.apply(x)
-                                ));
+                                *self = Self::Task(exec.apply(op, x));
                             },
                             _ => unreachable!()
                         },
@@ -141,11 +121,11 @@ mod norm {
 
             /// Requires the selected slot to be `None` - i.e. only be called
             /// from a child not lying about its parent.
-            pub(super) fn fill_slot(&mut self, right:bool, obj:O, exec:&E) {
+            pub(super) fn fill_slot(&mut self, right:bool, obj:Leaf, exec:&E) {
                 match self {
                     InFrame::Hold { l, r } => {
-                        if right {*r = Some(Tree::Obj(obj))}
-                        else     {*l = Some(Tree::Obj(obj))}
+                        if right {*r = Some(Tree::Lea(obj))}
+                        else     {*l = Some(Tree::Lea(obj))}
                         // elim FrameQ-propr-post-expand-done-in
                         self.try_task(exec);
                         // intro FrameQ-propr-post-expand-done-in
@@ -157,8 +137,8 @@ mod norm {
 
             pub(super) fn children(&mut self, exec:&E) -> (Option<Self>, Option<Self>) {
 
-                fn take_slot<O: Object, E: Executor>
-                (slot: &mut Option<Tree<O>>, exec:&E) -> Option<InFrame<O, E>> {
+                fn take_slot<Leaf, E: Executor<Leaf>>
+                (slot: &mut Option<Tree<Leaf>>, exec:&E) -> Option<InFrame<Leaf, E>> {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
                             Some(Tree::Brc(b)) => {
@@ -186,25 +166,25 @@ mod norm {
             }
         }
 
-        pub(super) struct Frame<O: Object, E: Executor> {
+        pub(super) struct Frame<Leaf, E: Executor<Leaf>> {
             pub(super) src: Option<(usize, bool)>, // (parent_index, slot_is_right)
-            pub(super) innr: InFrame<O, E>
+            pub(super) innr: InFrame<Leaf, E>
         }
     }
 
     use alloc::vec::Vec;
-    use crate::{Branch, Object, Tree, executor::Executor};
+    use crate::{Branch, Tree, executor::Executor};
     use frame::{Frame, InFrame};
 
     // properties:
     //  - FrameQ-propr-min-1
     //  - FrameQ-propr-post-expand-OO-pop
     //  - FrameQ-propr-post-expand-done-in
-    pub(super) struct FrameQ<O: Object, E: Executor>
-    (Vec<Frame<O, E>>);
+    pub(super) struct FrameQ<Leaf, E: Executor<Leaf>>
+    (Vec<Frame<Leaf, E>>);
 
-    impl <O: Object, E: Executor> FrameQ<O, E> {
-        pub(super) fn new(b: Branch<O>, exec:&E) -> Self {
+    impl <Leaf, E: Executor<Leaf>> FrameQ<Leaf, E> {
+        pub(super) fn new(b: Branch<Leaf>, exec:&E) -> Self {
             let q = alloc::vec![Frame{
                 src:None,
                 innr:InFrame::new(b, exec)
@@ -228,15 +208,15 @@ mod norm {
             // intro FrameQ-propr-post-expand-OO-pop
         }
 
-        pub(super) fn reduce(&mut self, exec:&E) -> O {
+        pub(super) fn reduce(&mut self, exec:&E) -> Leaf {
             self.expand(exec);
 
             while let Some(Frame {
                 src,
                 innr:InFrame::Task(tsk)
             }) = self.0.pop() { // by FrameQ-propr-post-expand-OO-pop
-                match exec.complete(tsk) {
-                    Tree::Obj(o) => match src {
+                match exec.completed(tsk) {
+                    Tree::Lea(o) => match src {
                         Some((idx, right))
                             => self.0[idx].innr.fill_slot(right, o, exec),
                         None => return o, // elim FrameQ-propr-min-1
