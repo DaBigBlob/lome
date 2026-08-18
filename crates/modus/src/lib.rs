@@ -200,7 +200,6 @@ mod norm {
     //  - FrameQ-propr-min-1
     //  - FrameQ-propr-post-expand-OO-pop
     //  - FrameQ-propr-post-expand-done-in
-    // idiom for push: try_task -> push
     pub(super) struct FrameQ<O: Object, E: Executor>
     (Vec<Frame<O, E>>);
 
