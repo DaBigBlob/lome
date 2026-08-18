@@ -13,6 +13,7 @@
 )]
 
 extern crate alloc;
+use core::fmt;
 use alloc::boxed::Box;
 use executor::Executor;
 use norm::FrameQ;
@@ -47,15 +48,36 @@ impl <O: Object> From<(Tree<O>, Tree<O>)> for Tree<O> {
         Self::Brc(Box::new(Branch{l:value.0, r:value.1}))
     }
 }
+impl <O: Object + fmt::Debug> fmt::Debug for Tree<O> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Tree::Obj(o) => write!(f, "{o:?}"),
+            Tree::Brc(bb) => {
+                let (op, x) = (&(*bb).l, &(*bb).r);
+                write!(f, "({op:?}) ({x:?})")
+            }
+        }
+    }
+}
+impl <O: Object + Clone> Clone for Tree<O> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Obj(o) => Self::Obj(o.clone()),
+            Self::Brc(bb) => Self::Brc(bb.clone()),
+        }
+    }
+}
 
 /// Principal Expression i.e. Modus Ponenes
 pub struct Branch<O: Object> { l: Tree<O>, r: Tree<O> }
 impl <O: Object> Branch<O> {
     pub fn norm<E: Executor>(self, exec:&E) -> O {
         let mut frm = FrameQ::new(self, exec);
-        frm.expand(exec);
         frm.reduce(exec)
     }
+}
+impl <O: Object + Clone> Clone for Branch<O> {
+    fn clone(&self) -> Self {Self{l:self.l.clone(), r:self.r.clone()}}
 }
 
 pub mod executor {
@@ -190,7 +212,7 @@ mod norm {
             Self(q)
         }
 
-        pub(super) fn expand(&mut self, exec:&'a E) {
+        fn expand(&mut self, exec:&'a E) {
             let mut idx = self.0.len() - 1; // by FrameQ-propr-min-1
             while idx < self.0.len() {
                 let (lc, rc) = self.0[idx].innr.children(exec);
@@ -206,6 +228,8 @@ mod norm {
         }
 
         pub(super) fn reduce(&mut self, exec:&'a E) -> O {
+            self.expand(exec);
+
             while let Some(Frame {
                 src,
                 innr:InFrame::Task(tsk)
