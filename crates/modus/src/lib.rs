@@ -39,15 +39,14 @@ pub enum Tree<O: Object> {
 impl <O: Object> From<O> for Tree<O> {
     fn from(value: O) -> Self {Self::Obj(value)}
 }
-impl <O: Object> From<Branch<O>> for Tree<O> {
-    fn from(value: Branch<O>) -> Self {Self::Brc(Box::new(value))}
+impl <O: Object> From<(Tree<O>, Tree<O>)> for Tree<O> {
+    fn from(value: (Tree<O>, Tree<O>)) -> Self {
+        Self::Brc(Box::new(Branch{l:value.0, r:value.1}))
+    }
 }
 
 /// Principal Expression i.e. Modus Ponenes
 pub struct Branch<O: Object> { l: Tree<O>, r: Tree<O> }
-impl <O: Object> From<(Tree<O>, Tree<O>)> for Branch<O> {
-    fn from(value: (Tree<O>, Tree<O>)) -> Self {Self{l:value.0, r:value.1}}
-}
 impl <O: Object> Branch<O> {
     pub fn norm<E: Executor>(self, exec:&E) -> O {
         let mut frm = norm::FrameQ::new(self, exec);
@@ -151,7 +150,9 @@ mod norm {
     //  - FrameQ-propr-min-1
     //  - FrameQ-propr-post-expand-OO-pop
     // idiom for push: try_task -> push
-    pub struct FrameQ<'a, O: Object, E: Executor>(Vec<Frame<'a, O, E>>);
+    pub struct FrameQ<'a, O: Object, E: Executor>
+    (Vec<Frame<'a, O, E>>);
+
     impl <'a, O: Object, E: Executor> FrameQ<'a, O, E> {
         pub fn new(b: Branch<O>, exec:&'a E) -> Self {
             let mut q = Vec::new();
@@ -186,7 +187,8 @@ mod norm {
             }) = self.0.pop() { // by FrameQ-propr-post-expand-OO-pop
                 match exec.complete(tsk) {
                     Tree::Obj(o) => match src {
-                        Some((idx, right)) => self.0[idx].innr.fill_slot(right, o),
+                        Some((idx, right))
+                            => self.0[idx].innr.fill_slot(right, o),
                         None => return o, // elim FrameQ-propr-min-1
                     },
                     Tree::Brc(b) => {
