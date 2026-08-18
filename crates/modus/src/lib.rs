@@ -34,7 +34,7 @@ pub trait LeafApplicator<Leaf> {
     fn apply(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
 
     /// Wait for and obtain application result.
-    fn completed(&self, task: Self::ApplicatorTask) -> Tree<Leaf>;
+    fn completed(&self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
 /// Principal Expression
