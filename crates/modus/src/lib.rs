@@ -15,8 +15,28 @@
 extern crate alloc;
 use core::fmt;
 use alloc::boxed::Box;
-use executor::Executor;
 use norm::FrameQ;
+
+/// 1. ApplicatorTask may fail, but what is means to fail is semantics local
+///    to the implementor - just like what false or absurdity is at the
+///    foundations of mathematics. The implementor must agree with himself
+///    on that meaning. We, on our side, simply do not - and should not - care.
+///
+/// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Obj(op), r:Tree::Obj(x)}))`
+///    is returned by completed(), we naively re-apply.
+///
+/// 3. LeafApplicator is assumed to be pure. Whether its actually pure
+///    is up to implementation - in-fact many times impurity is desired
+///    - but that is again up to the implementor.
+pub trait LeafApplicator<Leaf> {
+    type ApplicatorTask;
+
+    /// Begin or schedule an application (perhaps by another thread).
+    fn apply(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
+
+    /// Wait for and obtain application result.
+    fn completed(&self, task: Self::ApplicatorTask) -> Tree<Leaf>;
+}
 
 /// Expression
 pub enum Tree<Leaf> {
@@ -56,47 +76,34 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 /// Principal Expression i.e. Modus Ponenes
 pub struct Branch<Leaf> { l: Tree<Leaf>, r: Tree<Leaf> }
 impl <Leaf> Branch<Leaf> {
-    pub fn norm<E: Executor<Leaf>>(self, exec:&E) -> Leaf {
-        let mut frm = FrameQ::new(self, exec);
-        frm.reduce(exec)
+    pub fn norm<A: LeafApplicator<Leaf>>(self, applicator:&A) -> Leaf {
+        let mut frm = FrameQ::new(self, applicator);
+        frm.reduce(applicator)
     }
 }
 impl <Leaf: Clone> Clone for Branch<Leaf> {
     fn clone(&self) -> Self {Self{l:self.l.clone(), r:self.r.clone()}}
 }
 
-pub mod executor {
-    use crate::Tree;
-    pub trait Executor<Leaf> {
-        type Task;
-
-        /// Submit a computation (to perhaps another thread).
-        fn apply(&self, operator:Leaf, operand:Leaf) -> Self::Task;
-
-        /// Wait for and obtain its result.
-        fn completed(&self, task: Self::Task) -> Tree<Leaf>;
-    }
-}
-
 mod norm {
     mod frame {
-        use crate::{Branch, Tree, executor::Executor};
+        use crate::{Branch, Tree, LeafApplicator};
 
         /// DO NOT CONTSRUCT RAW: use InFrame::new()
-        pub(super) enum InFrame<Leaf, E: Executor<Leaf>>{
-            Task(E::Task),
+        pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
+            Task(A::ApplicatorTask),
             Hold{l:Option<Tree<Leaf>>, r:Option<Tree<Leaf>>}
         }
-        impl <Leaf, E: Executor<Leaf>> InFrame<Leaf, E> {
-            pub(super) fn new(b: Branch<Leaf>, exec:&E) -> Self {
+        impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
+            pub(super) fn new(b: Branch<Leaf>, ator:&A) -> Self {
                 let mut innr = InFrame::Hold{l:Some(b.l), r:Some(b.r)};
-                innr.try_task(exec);
+                innr.try_task(ator);
                 innr
             }
         }
-        impl <Leaf, E: Executor<Leaf>> InFrame<Leaf, E> {
+        impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
             /// not to be used outside of InFrame
-            fn try_task(&mut self, exec:&E) {
+            fn try_task(&mut self, ator:&A) {
                 match self {
                     InFrame::Hold { l, r }
                     => match (&*l, &*r) {
@@ -108,7 +115,7 @@ mod norm {
                                 Some(Tree::Lea(op)),
                                 Some(Tree::Lea(x))
                             ) => {
-                                *self = Self::Task(exec.apply(op, x));
+                                *self = Self::Task(ator.apply(op, x));
                             },
                             _ => unreachable!()
                         },
@@ -121,13 +128,13 @@ mod norm {
 
             /// Requires the selected slot to be `None` - i.e. only be called
             /// from a child not lying about its parent.
-            pub(super) fn fill_slot(&mut self, right:bool, obj:Leaf, exec:&E) {
+            pub(super) fn fill_slot(&mut self, right:bool, obj:Leaf, ator:&A) {
                 match self {
                     InFrame::Hold { l, r } => {
                         if right {*r = Some(Tree::Lea(obj))}
                         else     {*l = Some(Tree::Lea(obj))}
                         // elim FrameQ-propr-post-expand-done-in
-                        self.try_task(exec);
+                        self.try_task(ator);
                         // intro FrameQ-propr-post-expand-done-in
                     },
                     // never produced children
@@ -135,10 +142,10 @@ mod norm {
                 }
             }
 
-            pub(super) fn children(&mut self, exec:&E) -> (Option<Self>, Option<Self>) {
+            pub(super) fn children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
 
-                fn take_slot<Leaf, E: Executor<Leaf>>
-                (slot: &mut Option<Tree<Leaf>>, exec:&E) -> Option<InFrame<Leaf, E>> {
+                fn take_slot<Leaf, A: LeafApplicator<Leaf>>
+                (slot: &mut Option<Tree<Leaf>>, ator:&A) -> Option<InFrame<Leaf, A>> {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
                             Some(Tree::Brc(b)) => {
@@ -146,7 +153,7 @@ mod norm {
                                     l:Some(b.l),
                                     r:Some(b.r)
                                 };
-                                inf.try_task(exec);
+                                inf.try_task(ator);
                                 // ensure FrameQ-propr-post-expand-done-in
                                 Some(inf)
                             },
@@ -159,44 +166,44 @@ mod norm {
                 match self {
                     InFrame::Task(_) => (None, None),
                     InFrame::Hold { l, r } => (
-                        take_slot(l, exec),
-                        take_slot(r, exec)
+                        take_slot(l, ator),
+                        take_slot(r, ator)
                     )
                 }
             }
         }
 
-        pub(super) struct Frame<Leaf, E: Executor<Leaf>> {
+        pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
             pub(super) src: Option<(usize, bool)>, // (parent_index, slot_is_right)
-            pub(super) innr: InFrame<Leaf, E>
+            pub(super) innr: InFrame<Leaf, A>
         }
     }
 
     use alloc::vec::Vec;
-    use crate::{Branch, Tree, executor::Executor};
+    use crate::{Branch, Tree, LeafApplicator};
     use frame::{Frame, InFrame};
 
     // properties:
     //  - FrameQ-propr-min-1
     //  - FrameQ-propr-post-expand-OO-pop
     //  - FrameQ-propr-post-expand-done-in
-    pub(super) struct FrameQ<Leaf, E: Executor<Leaf>>
-    (Vec<Frame<Leaf, E>>);
+    pub(super) struct FrameQ<Leaf, A: LeafApplicator<Leaf>>
+    (Vec<Frame<Leaf, A>>);
 
-    impl <Leaf, E: Executor<Leaf>> FrameQ<Leaf, E> {
-        pub(super) fn new(b: Branch<Leaf>, exec:&E) -> Self {
+    impl <Leaf, A: LeafApplicator<Leaf>> FrameQ<Leaf, A> {
+        pub(super) fn new(b: Branch<Leaf>, ator:&A) -> Self {
             let q = alloc::vec![Frame{
                 src:None,
-                innr:InFrame::new(b, exec)
+                innr:InFrame::new(b, ator)
             }];
             // intro FrameQ-propr-min-1
             Self(q)
         }
 
-        fn expand(&mut self, exec:&E) {
+        fn expand(&mut self, ator:&A) {
             let mut idx = self.0.len() - 1; // by FrameQ-propr-min-1
             while idx < self.0.len() {
-                let (lc, rc) = self.0[idx].innr.children(exec);
+                let (lc, rc) = self.0[idx].innr.children(ator);
                 if let Some(innr) = lc {
                     self.0.push(Frame{src:Some((idx, false)), innr});
                 }
@@ -208,23 +215,23 @@ mod norm {
             // intro FrameQ-propr-post-expand-OO-pop
         }
 
-        pub(super) fn reduce(&mut self, exec:&E) -> Leaf {
-            self.expand(exec);
+        pub(super) fn reduce(&mut self, ator:&A) -> Leaf {
+            self.expand(ator);
 
             while let Some(Frame {
                 src,
                 innr:InFrame::Task(tsk)
             }) = self.0.pop() { // by FrameQ-propr-post-expand-OO-pop
-                match exec.completed(tsk) {
+                match ator.completed(tsk) {
                     Tree::Lea(o) => match src {
                         Some((idx, right))
-                            => self.0[idx].innr.fill_slot(right, o, exec),
+                            => self.0[idx].innr.fill_slot(right, o, ator),
                         None => return o, // elim FrameQ-propr-min-1
                     },
                     Tree::Brc(b) => {
-                        self.0.push(Frame {src, innr:InFrame::new(*b, exec)});
+                        self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
                         // emlim FrameQ-propr-post-expand-OO-pop
-                        self.expand(exec);
+                        self.expand(ator);
                         // intro FrameQ-propr-post-expand-OO-pop
                     },
                 }
