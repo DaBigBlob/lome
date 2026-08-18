@@ -18,7 +18,7 @@ use alloc::boxed::Box;
 use executor::Executor;
 use norm::FrameQ;
 
-pub trait Object: Sized {
+pub trait Object: Sized + Send + 'static {
     /// 1. apply() may fail, but what is means to fail is semantics local to the
     ///    implementor - just like what false or absurdity is at the foundations
     ///    of mathematics. The implementor must agree with himself on that meaning.
@@ -82,15 +82,17 @@ impl <O: Object + Clone> Clone for Branch<O> {
 
 pub mod executor {
     pub trait Executor {
-        type Task<'a, T: 'a>: 'a
-            where Self: 'a;
-        /// Essentially Spawn.
-        fn task<'a, T:  'a, F: FnOnce() -> T +  'a>
-        (&'a self, computation: F) -> Self::Task<'a, T>;
+        // Task (handle) is kept on the main dependency resolution thread
+        // so no need for Send.
+        type Task<T: Send + 'static>;
 
-        /// Essentially Join.
-        fn complete<'a, T:  'a>
-        (&'a self, task: Self::Task<'a, T>) -> T;
+        /// Submit a computation (to perhaps another thread).
+        fn task<T: Send + 'static, F: FnOnce() -> T + Send + 'static>
+        (&self, computation: F) -> Self::Task<T>;
+
+        /// Wait for and obtain its result.
+        fn complete<T: Send + 'static>
+        (&self, task: Self::Task<T>) -> T;
     }
 }
 
@@ -99,20 +101,20 @@ mod norm {
         use crate::{Branch, Object, Tree, executor::Executor};
 
         /// DO NOT CONTSRUCT RAW: use InFrame::new()
-        pub(super) enum InFrame<'a, O: Object + 'a, E: Executor + 'a>{
-            Task(E::Task<'a, Tree<O>>),
+        pub(super) enum InFrame<O: Object, E: Executor>{
+            Task(E::Task<Tree<O>>),
             Hold{l:Option<Tree<O>>, r:Option<Tree<O>>}
         }
-        impl <'a, O: Object, E: Executor> InFrame<'a, O, E> {
-            pub(super) fn new(b: Branch<O>, exec:&'a E) -> Self {
+        impl <O: Object, E: Executor> InFrame<O, E> {
+            pub(super) fn new(b: Branch<O>, exec:&E) -> Self {
                 let mut innr = InFrame::Hold{l:Some(b.l), r:Some(b.r)};
                 innr.try_task(exec);
                 innr
             }
         }
-        impl <'a, O: Object, E: Executor> InFrame<'a, O, E> {
+        impl <O: Object, E: Executor> InFrame<O, E> {
             /// not to be used outside of InFrame
-            fn try_task(&mut self, exec:&'a E) {
+            fn try_task(&mut self, exec:&E) {
                 match self {
                     InFrame::Hold { l, r }
                     => match (&*l, &*r) {
@@ -139,7 +141,7 @@ mod norm {
 
             /// Requires the selected slot to be `None` - i.e. only be called
             /// from a child not lying about its parent.
-            pub(super) fn fill_slot(&mut self, right:bool, obj:O, exec:&'a E) {
+            pub(super) fn fill_slot(&mut self, right:bool, obj:O, exec:&E) {
                 match self {
                     InFrame::Hold { l, r } => {
                         if right {*r = Some(Tree::Obj(obj))}
@@ -153,10 +155,10 @@ mod norm {
                 }
             }
 
-            pub(super) fn children(&mut self, exec:&'a E) -> (Option<Self>, Option<Self>) {
+            pub(super) fn children(&mut self, exec:&E) -> (Option<Self>, Option<Self>) {
 
-                fn take_slot<'a, O: Object, E: Executor>
-                (slot: &mut Option<Tree<O>>, exec:&'a E) -> Option<InFrame<'a, O, E>> {
+                fn take_slot<O: Object, E: Executor>
+                (slot: &mut Option<Tree<O>>, exec:&E) -> Option<InFrame<O, E>> {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
                             Some(Tree::Brc(b)) => {
@@ -184,9 +186,9 @@ mod norm {
             }
         }
 
-        pub(super) struct Frame<'a, O: Object, E: Executor> {
+        pub(super) struct Frame<O: Object, E: Executor> {
             pub(super) src: Option<(usize, bool)>, // (parent_index, slot_is_right)
-            pub(super) innr: InFrame<'a, O, E>
+            pub(super) innr: InFrame<O, E>
         }
     }
 
@@ -199,11 +201,11 @@ mod norm {
     //  - FrameQ-propr-post-expand-OO-pop
     //  - FrameQ-propr-post-expand-done-in
     // idiom for push: try_task -> push
-    pub(super) struct FrameQ<'a, O: Object, E: Executor>
-    (Vec<Frame<'a, O, E>>);
+    pub(super) struct FrameQ<O: Object, E: Executor>
+    (Vec<Frame<O, E>>);
 
-    impl <'a, O: Object, E: Executor> FrameQ<'a, O, E> {
-        pub(super) fn new(b: Branch<O>, exec:&'a E) -> Self {
+    impl <O: Object, E: Executor> FrameQ<O, E> {
+        pub(super) fn new(b: Branch<O>, exec:&E) -> Self {
             let q = alloc::vec![Frame{
                 src:None,
                 innr:InFrame::new(b, exec)
@@ -212,7 +214,7 @@ mod norm {
             Self(q)
         }
 
-        fn expand(&mut self, exec:&'a E) {
+        fn expand(&mut self, exec:&E) {
             let mut idx = self.0.len() - 1; // by FrameQ-propr-min-1
             while idx < self.0.len() {
                 let (lc, rc) = self.0[idx].innr.children(exec);
@@ -227,7 +229,7 @@ mod norm {
             // intro FrameQ-propr-post-expand-OO-pop
         }
 
-        pub(super) fn reduce(&mut self, exec:&'a E) -> O {
+        pub(super) fn reduce(&mut self, exec:&E) -> O {
             self.expand(exec);
 
             while let Some(Frame {
