@@ -182,8 +182,10 @@ mod norm {
 
     impl <'a, O: Object, E: Executor> FrameQ<'a, O, E> {
         pub(super) fn new(b: Branch<O>, exec:&'a E) -> Self {
-            let mut q = Vec::new();
-            q.push(Frame{ src:None, innr:InFrame::new(b, exec) });
+            let q = alloc::vec![Frame{
+                src:None,
+                innr:InFrame::new(b, exec)
+            }];
             // intro FrameQ-propr-min-1
             Self(q)
         }
