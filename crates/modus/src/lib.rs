@@ -18,12 +18,12 @@ use core::fmt;
 use alloc::boxed::Box;
 use norm::FrameQ;
 
-/// 1. ApplicatorTask may "fail", but what is means to "fail" is semantics local
+/// 1. ApplicatorTask may "fail", but what it means to "fail" is semantics local
 ///    to the implementor - just like what false or absurdity is at the
 ///    foundations of mathematics. The implementor must agree with himself
 ///    on that meaning. We, on our side, simply do not - and should not - care.
-/// 2. If `Tree::Brc(Box::new(Branch {l:Tree::Lea(op), r:Tree::Lea(x)}))`
-///    is returned by completed(), is it naively re-apply-ed.
+/// 2. If `Tree::Brc(Box::new((Tree::Lea(op), Tree::Lea(x))))`
+///    is returned by completed(), is it naively reapplyed.
 /// 3. LeafApplicator is assumed to be pure. Whether its actually pure
 ///    is up to implementation - in-fact many times impurity is desired
 ///    - but that is again up to the implementor.
@@ -98,8 +98,7 @@ mod norm {
                 innr.try_task(ator);
                 innr
             }
-        }
-        impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
+
             /// not to be used outside of InFrame
             #[inline]
             fn try_task(&mut self, ator:&A) {
@@ -234,24 +233,6 @@ mod norm {
         pub(super) fn reduce(&mut self, ator:&A) -> Leaf {
             self.expand(ator);
 
-            // while let Some(Frame {
-            //     src,
-            //     innr:InFrame::Task(tsk)
-            // }) = self.0.pop() { // by FrameQ-propr-post-expand-OO-pop
-            //     match ator.completed(tsk) {
-            //         Tree::Lea(o) => match src {
-            //             Some(rf)
-            //             => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
-            //             None => return o, // elim FrameQ-propr-min-1
-            //         },
-            //         Tree::Brc(b) => {
-            //             self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
-            //             // emlim FrameQ-propr-post-expand-OO-pop
-            //             self.expand(ator);
-            //             // intro FrameQ-propr-post-expand-OO-pop
-            //         },
-            //     }
-            // }
             while let Some(Frame {src, innr}) = self.0.pop() {match innr {
                 InFrame::Task(tsk) => match ator.completed(tsk) {
                     Tree::Lea(o) => match src {
