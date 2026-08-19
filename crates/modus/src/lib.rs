@@ -97,115 +97,116 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 }
 
 mod norm {
-    mod frame {
-        use crate::{Tree, LeafApplicator};
+mod frame {
+use crate::{Tree, LeafApplicator};
 
-        /// DONT CONSTRUCT RAW: use InFrame::new().
-        pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
-            Task(A::ApplicatorTask),
-            Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
-        }
-        impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
-            pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
-                let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
-                innr.try_task(ator);
-                innr
-            }
+/// DONT CONSTRUCT RAW: use InFrame::new().
+pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
+    Task(A::ApplicatorTask),
+    Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
+}
+impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
+    pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
+        let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
+        innr.try_task(ator);
+        innr
+    }
 
-            /// try Hold -> Task.
-            #[inline]
-            fn try_task(&mut self, ator:&A) {
-                match self {
-                    InFrame::Hold((l, r))
-                    => match (&*l, &*r) {
-                        (
-                            Some(Tree::Lea(_)),
-                            Some(Tree::Lea(_))
-                        ) => match (l.take(), r.take()) {
-                            (
-                                Some(Tree::Lea(op)),
-                                Some(Tree::Lea(x))
-                            ) => {
-                                *self = Self::Task(ator.apply(op, x));
-                            },
-                            _ => unreachable_fast!("trivial")
-                        },
-                        _ => ()
+    /// try Hold -> Task.
+    #[inline]
+    fn try_task(&mut self, ator:&A) {
+        match self {
+            InFrame::Hold((l, r))
+            => match (&*l, &*r) {
+                (
+                    Some(Tree::Lea(_)),
+                    Some(Tree::Lea(_))
+                ) => match (l.take(), r.take()) {
+                    (
+                        Some(Tree::Lea(op)),
+                        Some(Tree::Lea(x))
+                    ) => {
+                        *self = Self::Task(ator.apply(op, x));
                     },
-                    InFrame::Task(_) => (),
-                }
-            }
-
-            pub(super) fn fill_slot(&mut self, self_ref:Ref, with:Leaf, ator:&A) {
-                match self {
-                    InFrame::Hold(lr) => {
-                        match self_ref.slot(lr) {
-                            slot @ None => *slot = Some(Tree::Lea(with)),
-                            Some(_) => unreachable_fast!(
-                                "Caller guarantees the referenced slot is None."
-                            ),
-                        }
-                        self.try_task(ator);
-                    },
-                    InFrame::Task(_) => unreachable_fast!(
-                        "A referenced parent slot can exist only in Hold."
-                    ),
-                }
-            }
-
-            pub(super) fn pop_children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
-
-                fn slot2child<Leaf, A: LeafApplicator<Leaf>>
-                (slot: &mut Option<Tree<Leaf>>, ator:&A) -> Option<InFrame<Leaf, A>> {
-                    match &*slot {
-                        Some(Tree::Brc(_)) => match slot.take() {
-                            Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
-                            _ => unreachable_fast!("trivial"),
-                        },
-                        _ => None,
-                    }
-                }
-
-                match self {
-                    InFrame::Task(_) => (None, None),
-                    InFrame::Hold((l, r)) => (
-                        slot2child(l, ator),
-                        slot2child(r, ator)
-                    )
-                }
-            }
-        }
-
-        /// Parent Frame and expanded slot.
-        pub(super) struct Ref(usize, bool);
-        impl Ref {
-            /// Caller ensures idx is valid.
-            #[inline]
-            pub(super) fn right(idx: usize) -> Self {Self(idx, true)}
-            /// Caller ensures idx is valid.
-            #[inline]
-            pub(super) fn left(idx: usize) -> Self {Self(idx, false)}
-            #[inline]
-            pub(super) fn slot<'a, Leaf>
-            (&self, frm: &'a mut (Option<Tree<Leaf>>, Option<Tree<Leaf>>))
-            -> &'a mut Option<Tree<Leaf>> {
-                match self.1 {
-                    true => &mut frm.1,
-                    false => &mut frm.0,
-                }
-            }
-            #[inline]
-            pub(super) fn frame<'a, Leaf, A: LeafApplicator<Leaf>>
-            (&self, vec: &'a mut [Frame<Leaf, A>])
-            -> &'a mut Frame<Leaf, A> { &mut vec[self.0]}
-        }
-
-        pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
-            /// None only for the bottom Frame.
-            pub(super) src: Option<Ref>,
-            pub(super) innr: InFrame<Leaf, A>
+                    _ => unreachable_fast!("trivial")
+                },
+                _ => ()
+            },
+            InFrame::Task(_) => (),
         }
     }
+
+    pub(super) fn fill_slot(&mut self, self_ref:Ref, with:Leaf, ator:&A) {
+        match self {
+            InFrame::Hold(lr) => {
+                match self_ref.slot(lr) {
+                    slot @ None => *slot = Some(Tree::Lea(with)),
+                    Some(_) => unreachable_fast!(
+                        "Caller guarantees the referenced slot is None."
+                    ),
+                }
+                self.try_task(ator);
+            },
+            InFrame::Task(_) => unreachable_fast!(
+                "A referenced parent slot can exist only in Hold."
+            ),
+        }
+    }
+
+    pub(super) fn pop_children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
+
+        fn slot2child<Leaf, A: LeafApplicator<Leaf>>
+        (slot: &mut Option<Tree<Leaf>>, ator:&A) -> Option<InFrame<Leaf, A>> {
+            match &*slot {
+                Some(Tree::Brc(_)) => match slot.take() {
+                    Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
+                    _ => unreachable_fast!("trivial"),
+                },
+                _ => None,
+            }
+        }
+
+        match self {
+            InFrame::Task(_) => (None, None),
+            InFrame::Hold((l, r)) => (
+                slot2child(l, ator),
+                slot2child(r, ator)
+            )
+        }
+    }
+}
+
+/// Parent Frame and expanded slot.
+pub(super) struct Ref(usize, bool);
+impl Ref {
+    /// Caller ensures idx is valid.
+    #[inline]
+    pub(super) fn right(idx: usize) -> Self {Self(idx, true)}
+    /// Caller ensures idx is valid.
+    #[inline]
+    pub(super) fn left(idx: usize) -> Self {Self(idx, false)}
+    #[inline]
+    pub(super) fn slot<'a, Leaf>
+    (&self, frm: &'a mut (Option<Tree<Leaf>>, Option<Tree<Leaf>>))
+    -> &'a mut Option<Tree<Leaf>> {
+        match self.1 {
+            true => &mut frm.1,
+            false => &mut frm.0,
+        }
+    }
+    #[inline]
+    pub(super) fn frame<'a, Leaf, A: LeafApplicator<Leaf>>
+    (&self, vec: &'a mut [Frame<Leaf, A>])
+    -> &'a mut Frame<Leaf, A> { &mut vec[self.0]}
+}
+
+pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
+    /// None only for the bottom Frame.
+    pub(super) src: Option<Ref>,
+    pub(super) innr: InFrame<Leaf, A>
+}
+
+}
 
     use alloc::vec::Vec;
     use crate::{LeafApplicator, Tree};
@@ -216,14 +217,12 @@ mod norm {
 
     impl <Leaf, A: LeafApplicator<Leaf>> FrameQ<Leaf, A> {
         pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
-            let q = alloc::vec![Frame{
-                src:None,
-                innr:InFrame::new(b, ator)
-            }];
+            let q = alloc::vec![Frame{src:None, innr:InFrame::new(b, ator)}];
             Self(q)
         }
 
         fn expand(&mut self, ator:&A) {
+            // alwys have >=1 frame unless self dropped
             let mut idx = self.0.len() - 1;
             while idx < self.0.len() {
                 let (lc, rc) = self.0[idx].innr.pop_children(ator);
@@ -240,15 +239,22 @@ mod norm {
         pub(super) fn reduce(mut self, ator:&A) -> Leaf {
             self.expand(ator); // reduce without expand is undefined
 
+            // we take top
             while let Some(Frame {src, innr}) = self.0.pop() {match innr {
                 InFrame::Task(tsk) => match ator.completed(tsk) {
+                    // nice
                     Tree::Lea(o) => match src {
+                        // parent slot fill
                         Some(rf) => rf.frame(&mut self.0).
                                     innr.fill_slot(rf, o, ator),
+                        // seems like we have reached the end of queue
                         None => return o,
                     },
+                    // one must imagine sisyphus happy
                     Tree::Brc(b) => {
+                        // like inside FrameQ::new()
                         self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
+                        // like start of reduce()
                         self.expand(ator);
                     },
                 },
