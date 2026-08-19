@@ -17,9 +17,9 @@ pub struct Abs;
 /// Applicator
 pub struct Applicator;
 impl modus::LeafApplicator<Abs> for Applicator {
-    type ApplicatorTask = ();
+    type ApplicatorTask = (Abs, Abs);
 
-    fn apply(&self, operator:Abs, operand:Abs) -> Self::ApplicatorTask {
+    fn task(&self, operator:Abs, operand:Abs) -> Self::ApplicatorTask {
         todo!()
     }
 

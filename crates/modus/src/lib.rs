@@ -33,7 +33,7 @@ use norm::FrameQ;
 ///
 /// Task protocol:
 /// 1. Multiple ApplicatorTasks may coexist.
-/// 2. apply() must remain usable while earlier ApplicatorTasks are outstanding.
+/// 2. task() must remain usable while earlier ApplicatorTasks are outstanding.
 /// 3. Later calls must not invalidate earlier ApplicatorTasks.
 /// 4. ApplicatorTasks may be passed to completed() in unspecified order.
 /// 5. completed() consumes exactly one ApplicatorTask and returns the result of
@@ -48,7 +48,7 @@ pub trait LeafApplicator<Leaf> {
     type ApplicatorTask;
 
     /// Begin or schedule `operator operand`.
-    fn apply(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
+    fn task(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
 
     /// Wait for or execute `task`, then return its application result.
     fn completed(&self, task:Self::ApplicatorTask) -> Tree<Leaf>;
@@ -134,7 +134,7 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
                         Some(Tree::Lea(op)),
                         Some(Tree::Lea(x))
                     ) => {
-                        *self = Self::Task(ator.apply(op, x));
+                        *self = Self::Task(ator.task(op, x));
                     },
                     _ => unreachable_unchecked_fast!("Same Branch.")
                 },
