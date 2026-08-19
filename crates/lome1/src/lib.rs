@@ -5,8 +5,12 @@
     clippy::expect_used,
     clippy::todo,
     clippy::unimplemented,
-    clippy::unreachable,
     clippy::arithmetic_side_effects,
+)]
+#![allow(
+    clippy::unreachable,
+    clippy::single_match,
+    clippy::explicit_auto_deref
 )]
 
 extern crate alloc;
@@ -30,17 +34,20 @@ pub enum Leaf<Con>{
 pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
 impl <Con> Tree<Con> {
     pub fn norm<A: ConApplicator<Con>>(self, applicator:&mut A) -> Con {
-        todo!()
+        match self.0.norm(&mut normm::LeafApplicator(applicator)) {
+            Leaf::Con(c) => c,
+            _ => unreachable!()
+        }
     }
 }
 
-mod applicator {
+mod normm {
 use crate::{ConApplicator, Leaf};
 
 pub(super) struct LeafApplicator<From>(pub From);
 
 impl<Con, A: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
-for LeafApplicator<A> {
+for LeafApplicator<&mut A> {
     type ApplicatorTask = A::ConTask;
 
     fn task(&mut self, _operator:Leaf<Con>, _operand:Leaf<Con>)
