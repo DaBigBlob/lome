@@ -35,9 +35,9 @@ use norm::FrameQ;
 ///    required. We do not/should not care.
 /// 2. completed() returning
 ///    `Brc(Box::new((Lea(op), Lea(x))))` causes naive reapply.
-/// 3. Pure LeafApplicator gives schedule-independent semantics.
-///    Impure LeafApplicator permitted; semantics may depend on scheduling
-///    and completion order.
+/// 3. If completed(apply(operator, operand)) observationally depends only on
+///    operator and operand, normalization is schedule-independent.
+///    Otherwise semantics may depend on scheduling and completion order.
 pub trait LeafApplicator<Leaf> {
     type ApplicatorTask;
 
@@ -69,13 +69,6 @@ impl <Leaf> Tree<Leaf> {
             Tree::Lea(lf) => lf,
             Tree::Brc(bb) => {
                 let frm = FrameQ::new(*bb, applicator);
-                // #intro Invariant-Hold-ready
-                // #intro Invariant-expansion-owner
-                // #intro Invariant-lower-Brc-free
-
-                // #use Invariant-Hold-ready
-                // #use Invariant-expansion-owner
-                // #use Invariant-lower-Brc-free
                 frm.reduce(applicator)
             },
         }
@@ -125,6 +118,7 @@ mod norm {
     //
     // Invariant-popped-expansion:
     //   Popped Frame was top Task.
+    //   Every remaining Hold slot is Brc-free.
     //   src=Some(rf) => rf references a surviving parent Hold None slot;
     //   all other expansion ownership remains valid.
     //   src=None => remaining FrameQ empty.
@@ -295,13 +289,14 @@ mod norm {
         // #need Invariant-lower-Brc-free
         fn expand(&mut self, ator:&A) {
             // #use Invariant-expansion-owner
+            // #use Invariant-lower-Brc-free
             let mut idx = self.0.len() - 1;
+            // #elim Invariant-lower-Brc-free
 
             // Dynamic bound processes appended Frames.
             //
             // #use Invariant-Hold-ready
             // #use Invariant-expansion-owner
-            // #use Invariant-lower-Brc-free
             while idx < self.0.len() {
                 // #use Invariant-Hold-ready
                 let (lc, rc) = self.0[idx].innr.children(ator);
@@ -322,7 +317,6 @@ mod norm {
 
                 idx += 1;
             }
-            // #elim Invariant-lower-Brc-free
             // #intro Invariant-lower-Brc-free
             // #intro Invariant-reduce-entry
         }
