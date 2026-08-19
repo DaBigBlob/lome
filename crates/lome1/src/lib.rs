@@ -28,3 +28,19 @@ pub enum Leaf<Con>{
     App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
     Con(Con)
 }
+
+// struct LeafApplicator<Con, CA: ConApplicator<Con>>(CA);
+// impl <Con, CA: ConApplicator<Con>> LeafApplicator<Con, CA> {
+//     new
+// }
+// impl <Con, CA: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>> for LeafApplicator {
+//     type ApplicatorTask = CA::ConAppTask;
+
+//     fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>) -> Self::ApplicatorTask {
+//         todo!()
+//     }
+
+//     fn completed(&mut self, task:Self::ApplicatorTask) -> lome0::Tree<Leaf<Con>> {
+//         todo!()
+//     }
+// }
