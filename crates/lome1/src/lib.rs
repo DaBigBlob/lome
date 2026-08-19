@@ -29,6 +29,8 @@ pub enum Leaf<Con>{
     Con(Con)
 }
 
+
+
 // struct LeafApplicator<Con, CA: ConApplicator<Con>>(CA);
 // impl <Con, CA: ConApplicator<Con>> LeafApplicator<Con, CA> {
 //     new
