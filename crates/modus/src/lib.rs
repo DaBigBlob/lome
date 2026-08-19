@@ -13,17 +13,6 @@
     clippy::explicit_auto_deref
 )]
 
-macro_rules! unreachable_unchecked_fast {
-    ($($arg:tt)*) => {{
-        #[cfg(debug_assertions)]
-        { unreachable!($($arg)*) }
-
-        #[cfg(not(debug_assertions))]
-        // SAFETY: each call site proves unreachable.
-        unsafe { core::hint::unreachable_unchecked() }
-    }};
-}
-
 extern crate alloc;
 use core::fmt;
 use alloc::boxed::Box;
@@ -37,9 +26,10 @@ use norm::FrameQ;
 /// Returning `Tree::Brc(Box::new((Tree::Lea(operator), Tree::Lea(operand))))`
 /// causes (eventual) naive reapplication.
 ///
-/// If each completed application observationally depends only on its operator
-/// and operand, normalization is schedule-independent. Otherwise behavior may
-/// depend on scheduling and execution order.
+/// If applications are deterministic and observationally pure, every
+/// terminating normalization returns the same Leaf independently of scheduling.
+/// With observable effects, schedule independence additionally requires effects
+/// of concurrently executable applications to commute.
 ///
 /// Task protocol:
 /// 1. Multiple ApplicatorTasks may coexist.
@@ -113,6 +103,17 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 mod norm {
 mod frame {
 use crate::{LeafApplicator, Tree};
+
+macro_rules! unreachable_unchecked_fast {
+    ($($arg:tt)*) => {{
+        #[cfg(debug_assertions)]
+        { unreachable!($($arg)*) }
+
+        #[cfg(not(debug_assertions))]
+        // SAFETY: each call site proves unreachable.
+        unsafe { core::hint::unreachable_unchecked() }
+    }};
+}
 
 /// DONT CONSTRUCT RAW: use InFrame::new().
 pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
