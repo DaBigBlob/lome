@@ -13,27 +13,37 @@
     clippy::explicit_auto_deref
 )]
 
+macro_rules! unreachable_fast {
+    () => {{
+        #[cfg(debug_assertions)]
+        { unreachable!()}
+
+        #[cfg(not(debug_assertions))]
+        unsafe {
+            // SAFETY: caller asserts unreachable.
+            core::hint::unreachable_unchecked()
+        }
+    }};
+}
+
 extern crate alloc;
 use core::fmt;
 use alloc::boxed::Box;
 use norm::FrameQ;
 
-/// 1. ApplicatorTask may "fail", but what it means to "fail" is semantics local
-///    to the implementor - just like what false or absurdity is at the
-///    foundations of mathematics. The implementor must agree with himself
-///    on that meaning. We, on our side, simply do not - and should not - care.
-/// 2. If `Tree::Brc(Box::new((Tree::Lea(op), Tree::Lea(x))))`
-///    is returned by completed(), is it naively reapplyed.
-/// 3. LeafApplicator is assumed to be pure. Whether its actually pure
-///    is up to implementation - in-fact many times impurity is desired
-///    - but that is again up to the implementor.
+/// 1. ApplicatorTask "failure" semantics implementor-local; implementor must
+///    self-agree. We do not/should not care.
+/// 2. completed() returning
+///    `Tree::Brc(Box::new((Tree::Lea(op), Tree::Lea(x))))` causes naive reapply.
+/// 3. LeafApplicator assumed pure. Actual purity implementor-defined; impurity
+///    permitted/possibly desired.
 pub trait LeafApplicator<Leaf> {
     type ApplicatorTask;
 
-    /// Begin or schedule an application (perhaps by another thread).
+    /// Begin/schedule application, perhaps elsewhere/thread.
     fn apply(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
 
-    /// Wait for and obtain application result.
+    /// Wait/get application result.
     fn completed(&self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
@@ -87,19 +97,20 @@ mod norm {
     mod frame {
         use crate::{Tree, LeafApplicator};
 
-        /// DO NOT CONTSRUCT RAW: use InFrame::new()
+        /// DO NOT CONSTRUCT RAW: use InFrame::new()
         pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
             Task(A::ApplicatorTask),
             Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
         }
         impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
+            /// Establish FrameQ-inv-ready-is-task: Hold(Lea,Lea) -> Task.
             pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
                 let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
                 innr.try_task(ator);
                 innr
             }
 
-            /// not to be used outside of InFrame
+            /// Internal. Preserve FrameQ-inv-ready-is-task.
             #[inline]
             fn try_task(&mut self, ator:&A) {
                 match self {
@@ -115,30 +126,38 @@ mod norm {
                             ) => {
                                 *self = Self::Task(ator.apply(op, x));
                             },
-                            _ => unreachable!()
+                            // Both just proven Some(Lea); no intervening mutation.
+                            _ => unreachable_fast!()
                         },
                         _ => ()
                     },
-                    // never produced children
+                    // Task: no children, ready.
                     InFrame::Task(_) => (),
                 }
             }
 
-            /// Requires the selected slot to be `None` - i.e. only be called
-            /// from a child not lying about its parent.
+            /// Requires selected slot=None; truthful child-parent Ref.
+            ///
+            /// FrameQ-inv-child-slot: parent slot None while child live.
+            /// Fill consumes correspondence.
             pub(super) fn fill_slot(&mut self, rf:Ref, obj:Leaf, ator:&A) {
                 match self {
                     InFrame::Hold(lr) => {
-                        *(rf.slot(lr)) = Some(Tree::Lea(obj));
-                        // elim FrameQ-propr-post-expand-done-in
-                        self.try_task(ator);
-                        // intro FrameQ-propr-post-expand-done-in
+                        match rf.slot(lr) {
+                            slot @ None => *slot = Some(Tree::Lea(obj)),
+                            Some(_) => unreachable_fast!(), // FrameQ-inv-child-slot
+                        }
+                        self.try_task(ator); // preserve FrameQ-inv-ready-is-task
                     },
-                    // never produced children
-                    InFrame::Task(_) => unreachable!(),
+                    // Child only references parent Hold with detached slot.
+                    InFrame::Task(_) => unreachable_fast!(), // FrameQ-inv-child-slot
                 }
             }
 
+            /// Extract locally-owned branches to child frames.
+            ///
+            /// Each child: parent slot=None; child owns extracted computation.
+            /// Caller attaches Ref, completing FrameQ-inv-child-slot.
             pub(super) fn children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
 
                 fn take_slot<Leaf, A: LeafApplicator<Leaf>>
@@ -146,7 +165,8 @@ mod norm {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
                             Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
-                            _ => unreachable!(),
+                            // Brc just proven; no intervening mutation.
+                            _ => unreachable_fast!(),
                         },
                         _ => None,
                     }
@@ -162,16 +182,21 @@ mod norm {
             }
         }
 
+        /// Parent frame + slot computed by child.
+        ///
+        /// FrameQ-inv-parent-before-child:
+        /// Ref of frame i => self.0 < i.
         pub(super) struct Ref(usize, bool);
         impl Ref {
-            /// Caller must assert this idx is valid
+            /// Caller asserts idx valid.
             #[inline]
             pub(super) fn right(idx: usize) -> Self {Self(idx, true)}
 
-            /// Caller must assert this idx is valid
+            /// Caller asserts idx valid.
             #[inline]
             pub(super) fn left(idx: usize) -> Self {Self(idx, false)}
 
+            /// Select referenced parent slot.
             #[inline]
             pub(super) fn slot<'a, Leaf>
             (&self, frm: &'a mut (Option<Tree<Leaf>>, Option<Tree<Leaf>>))
@@ -182,6 +207,10 @@ mod norm {
                 }
             }
 
+            /// Get referenced parent frame.
+            ///
+            /// Just-popped child i: parent<i==vec.len()
+            /// by FrameQ-inv-parent-before-child.
             #[inline]
             pub(super) fn frame<'a, Leaf, A: LeafApplicator<Leaf>>
             (&self, vec: &'a mut [Frame<Leaf, A>])
@@ -189,7 +218,8 @@ mod norm {
         }
 
         pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
-            pub(super) src: Option<Ref>, // (parent_index, slot_is_right)
+            /// None only root continuation.
+            pub(super) src: Option<Ref>,
             pub(super) innr: InFrame<Leaf, A>
         }
     }
@@ -198,10 +228,35 @@ mod norm {
     use crate::{LeafApplicator, Tree};
     use frame::{Frame, InFrame, Ref};
 
-    // properties:
-    //  - FrameQ-propr-min-1
-    //  - FrameQ-propr-post-expand-OO-pop
-    //  - FrameQ-propr-post-expand-done-in
+    // FrameQ invariants:
+    //
+    // FrameQ-inv-parent-before-child:
+    //   frame i, src=Some(Ref(parent,_)) => parent<i.
+    //
+    // FrameQ-inv-child-slot:
+    //   non-root frame <-> exactly one None parent slot.
+    //   child owns that slot's computation.
+    //
+    // FrameQ-inv-ready-is-task:
+    //   Hold never has two Lea; Hold(Lea,Lea) immediately -> Task.
+    //
+    // FrameQ-inv-expanded-hold:
+    //   post-expand Hold slots only None|Lea, never Brc;
+    //   every Hold waits on >=1 live child.
+    //
+    // FrameQ-inv-top-task:
+    //   every reduce-loop entry: final frame Task.
+    //
+    // FrameQ-inv-root-continuation:
+    //   every reduce-loop entry: exactly one live src=None root continuation.
+    //   each iteration returns root Lea or leaves live root + nonempty queue.
+    //
+    // Derived:
+    //   child-slot
+    // + parent-before-child
+    // + ready-is-task
+    // + expanded-hold
+    // => top-task.
     pub(super) struct FrameQ<Leaf, A: LeafApplicator<Leaf>>
     (Vec<Frame<Leaf, A>>);
 
@@ -211,45 +266,79 @@ mod norm {
                 src:None,
                 innr:InFrame::new(b, ator)
             }];
-            // intro FrameQ-propr-min-1
+            // Establish unique root continuation.
             Self(q)
         }
 
+        /// Requires nonempty queue.
+        ///
+        /// Extract all locally-owned Brc reachable from current suffix.
+        /// Return:
+        ///  - establish expanded-hold;
+        ///  - preserve parent-before-child;
+        ///  - preserve/establish child-slot;
+        ///  - with other invariants establish top-task.
         fn expand(&mut self, ator:&A) {
-            let mut idx = self.0.len() - 1; // by FrameQ-propr-min-1
+            // Nonempty call sites:
+            //  - initial FrameQ::new;
+            //  - returned Brc after replacement push.
+            let mut idx = self.0.len() - 1;
             while idx < self.0.len() {
                 let (lc, rc) = self.0[idx].innr.children(ator);
+
                 if let Some(innr) = lc {
+                    // detach left Brc => parent slot=None;
+                    // push child strictly after parent.
                     self.0.push(Frame{src:Some(Ref::left(idx)), innr});
+                    // establish child's parent-before-child + child-slot.
                 }
+
                 if let Some(innr) = rc {
+                    // same right.
                     self.0.push(Frame{src:Some(Ref::right(idx)), innr});
+                    // establish child's parent-before-child + child-slot.
                 }
+
                 idx += 1;
             }
-            // intro FrameQ-propr-post-expand-OO-pop
+            // No live Hold has local Brc => expanded-hold.
+            //
+            // Hold cannot have two Lea (ready-is-task), so topmost Hold has None.
+            // child-slot => live child above it, contradiction.
+            // Therefore top frame Task => top-task.
         }
 
         pub(super) fn reduce(&mut self, ator:&A) -> Leaf {
             self.expand(ator);
 
             while let Some(Frame {src, innr}) = self.0.pop() {match innr {
+                // FrameQ-inv-top-task
                 InFrame::Task(tsk) => match ator.completed(tsk) {
                     Tree::Lea(o) => match src {
                         Some(rf)
+                        // parent-before-child => parent survives child pop;
+                        // child-slot => referenced slot=None.
                         => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
-                        None => return o, // elim FrameQ-propr-min-1
+
+                        // root continuation complete.
+                        None => return o,
                     },
+
                     Tree::Brc(b) => {
+                        // Replace computation; preserve continuation/src.
                         self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
-                        // emlim FrameQ-propr-post-expand-OO-pop
+
+                        // Re-establish expanded-hold/top-task.
                         self.expand(ator);
-                        // intro FrameQ-propr-post-expand-OO-pop
                     },
                 },
-                _ => unreachable!(), // by FrameQ-propr-post-expand-OO-pop
+
+                _ => unreachable_fast!(), // FrameQ-inv-top-task
             }}
-            unreachable!() // by FrameQ-propr-min-1
+
+            // Non-root completion leaves parent.
+            // Root completion returns or pushes replacement root.
+            unreachable_fast!() // FrameQ-inv-root-continuation
         }
     }
 }
