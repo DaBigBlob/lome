@@ -13,43 +13,24 @@ extern crate alloc;
 use alloc::boxed::Box;
 use lome0;
 
-// leaf is now constructor
-// pub trait ConApplicator<Con> {
-//     /// Owned handle for one application.
-//     type ApplicatorTask;
-
-//     /// Begin or schedule `operator operand`.
-//     fn task(&mut self, operator:Con, operand:Con) -> Self::ApplicatorTask;
-
-//     /// Wait for or execute `task`, then return its application result.
-//     fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Con>;
-// }
-
-/*
-
-we only need to care about reducing to App(Con, Con).
-we will now decide and fill in when the
-
-(Con, Con) is taken from above
-app is handled below.
-we need to construct pure App in terms of Con.
-
-*/
-
-// type AppTree<L> = lome0::Tree<L>;
+// constructors do:
+// constructors(constructors) -> constructors
+pub trait ConApplicator<Con> {
+    type ConAppTask;
+    fn task(&mut self, operator:Con, operand:Con) -> Self::ConAppTask;
+    fn completed(&mut self, task:Self::ConAppTask) -> Con;
+}
 
 // we must recognize that we are the Leaf implementors
 #[derive(PartialEq, Eq)]
-pub enum AppLeaf<Con>{
-    Abs(Box<(AppLeaf<Con>, AppLeaf<Con>)>),
-    App(AppTree<Con>),
-    Lea(Con)
+pub enum Leaf<Con>{
+    Abs(Box<(Leaf<Con>, Leaf<Con>)>),
+    App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
+    ConTree(Con)
 }
-// now we impl apply on all pairs of Tree<Con>
-// (Con, Con) -> Tree<Con> is offloaded to above
+// norm:
+// keep normalizing Leaf::App(lome0::Tree<Box<Leaf<Con>>>) to Leaf
+// till we reach Leaf::ConTree - which is pure lome0::Tree<Con>
+// then we call normalize with applicator from above
 
-pub type AppTree<Con> = lome0::Tree<Box<AppLeaf<Con>>>;
-
-// we must now implement applicator for (Leaf, Leaf)
-// - that is our responsibility, of which,
-// (Leaf::Con, Leaf::Con) is the responsibility of above level
+// we also do norm (to ConTree) during task() an
