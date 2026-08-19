@@ -37,7 +37,7 @@ impl <Con> Tree<Con> {
         match self.0.norm(&mut LeafApplicator(applicator)) {
             Leaf::Con(c) => c,
             _ => unreachable!(
-                "Our LeafApplicator guarantees this is unreachable."
+                "Our LeafApplicator.completed() guarantees this is unreachable."
             )
         }
     }
@@ -45,7 +45,8 @@ impl <Con> Tree<Con> {
 
 struct LeafApplicator<ConApp>(pub ConApp);
 impl <ConApp> LeafApplicator<ConApp> {
-
+    // Leaf(Leaf) -> Tree
+    pub fn apply<Leaf>() {}
 }
 impl<Con, A: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
 for LeafApplicator<&mut A> {
