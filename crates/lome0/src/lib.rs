@@ -54,7 +54,7 @@ pub trait LeafApplicator<Leaf> {
     fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
-/// Eager serial Applicator for functions
+/// Eager serial applicator for functions
 impl<Leaf, Fun: FnMut(Leaf, Leaf) -> Tree<Leaf>>
 LeafApplicator<Leaf> for Fun {
     type ApplicatorTask = Tree<Leaf>;
