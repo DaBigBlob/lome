@@ -43,8 +43,10 @@ impl <Con> Tree<Con> {
     }
 }
 
-struct LeafApplicator<From>(pub From);
+struct LeafApplicator<ConApp>(pub ConApp);
+impl <ConApp> LeafApplicator<ConApp> {
 
+}
 impl<Con, A: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
 for LeafApplicator<&mut A> {
     type ApplicatorTask = A::ConTask;
