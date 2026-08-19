@@ -62,14 +62,6 @@ pub enum Tree<Leaf> {
     /// Branch (Modus Ponens)
     Brc(Box<(Tree<Leaf>, Tree<Leaf>)>)
 }
-impl <Leaf> From<Leaf> for Tree<Leaf> {
-    fn from(value: Leaf) -> Self {Self::Lea(value)}
-}
-impl <Leaf> From<(Tree<Leaf>, Tree<Leaf>)> for Tree<Leaf> {
-    fn from(value: (Tree<Leaf>, Tree<Leaf>)) -> Self {
-        Self::Brc(Box::new((value.0, value.1)))
-    }
-}
 impl <Leaf> Tree<Leaf> {
     pub fn norm<A: LeafApplicator<Leaf>>(self, applicator:&mut A) -> Leaf {
         match self {
