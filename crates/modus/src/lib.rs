@@ -35,8 +35,9 @@ use norm::FrameQ;
 ///    required. We do not/should not care.
 /// 2. completed() returning
 ///    `Brc(Box::new((Lea(op), Lea(x))))` causes naive reapply.
-/// 3. LeafApplicator assumed pure. Actual purity implementor-defined;
-///    impurity permitted.
+/// 3. Pure LeafApplicator gives schedule-independent semantics.
+///    Impure LeafApplicator permitted; semantics may depend on scheduling
+///    and completion order.
 pub trait LeafApplicator<Leaf> {
     type ApplicatorTask;
 
@@ -68,6 +69,13 @@ impl <Leaf> Tree<Leaf> {
             Tree::Lea(lf) => lf,
             Tree::Brc(bb) => {
                 let frm = FrameQ::new(*bb, applicator);
+                // #intro Invariant-Hold-ready
+                // #intro Invariant-expansion-owner
+                // #intro Invariant-lower-Brc-free
+
+                // #use Invariant-Hold-ready
+                // #use Invariant-expansion-owner
+                // #use Invariant-lower-Brc-free
                 frm.reduce(applicator)
             },
         }
@@ -104,9 +112,22 @@ mod norm {
     //   Refs biject non-bottom Frames with parent None slots.
     //   Each child Frame owns its referenced expansion.
     //
+    // Invariant-lower-Brc-free:
+    //   Every Frame below top has no Hold Brc slot.
+    //
     // Invariant-reduce-entry:
     //   No Hold slot contains Brc.
     //   Top Frame is Task.
+    //
+    // Invariant-detached-children:
+    //   Returned children own exactly the Brc slots just detached from
+    //   Frame idx. Previous expansion ownership remains valid.
+    //
+    // Invariant-popped-expansion:
+    //   Popped Frame was top Task.
+    //   src=Some(rf) => rf references a surviving parent Hold None slot;
+    //   all other expansion ownership remains valid.
+    //   src=None => remaining FrameQ empty.
 
     mod frame {
         use crate::{Tree, LeafApplicator};
@@ -150,29 +171,33 @@ mod norm {
                 }
             }
 
-            /// Requires referenced parent Hold slot=None.
-            /// Completes popped child's expansion.
+            /// Complete popped child's expansion.
             ///
             // #need Invariant-Hold-ready
+            // #need Invariant-popped-expansion
             pub(super) fn fill_slot(&mut self, rf:Ref, obj:Leaf, ator:&A) {
+                // #use Invariant-popped-expansion
                 match self {
                     InFrame::Hold(lr) => {
+                        // #use Invariant-popped-expansion
                         match rf.slot(lr) {
                             slot @ None => *slot = Some(Tree::Lea(obj)),
-                            // Required slot=None.
                             Some(_) => unreachable_fast!(),
                         }
+                        // #elim Invariant-popped-expansion
                         // #elim Invariant-Hold-ready
+
                         self.try_task(ator);
                         // #intro Invariant-Hold-ready
                     },
-                    // Referenced parent has a slot, hence is Hold.
                     InFrame::Task(_) => unreachable_fast!(),
                 }
             }
 
             /// Detach local Brc slots into prospective child Frames.
             /// Detached slots become None. Caller pushes every returned child.
+            ///
+            // #need Invariant-Hold-ready
             pub(super) fn children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
 
                 fn take_slot<Leaf, A: LeafApplicator<Leaf>>
@@ -200,13 +225,21 @@ mod norm {
         /// Parent Frame and expanded slot.
         pub(super) struct Ref(usize, bool);
         impl Ref {
-            /// Requires valid parent index.
+            /// Construct right-slot Ref for detached child.
             #[inline]
-            pub(super) fn right(idx: usize) -> Self {Self(idx, true)}
+            // #need Invariant-detached-children
+            pub(super) fn right(idx: usize) -> Self {
+                // #use Invariant-detached-children
+                Self(idx, true)
+            }
 
-            /// Requires valid parent index.
+            /// Construct left-slot Ref for detached child.
             #[inline]
-            pub(super) fn left(idx: usize) -> Self {Self(idx, false)}
+            // #need Invariant-detached-children
+            pub(super) fn left(idx: usize) -> Self {
+                // #use Invariant-detached-children
+                Self(idx, false)
+            }
 
             /// Select parent slot.
             #[inline]
@@ -219,11 +252,14 @@ mod norm {
                 }
             }
 
-            /// Requires self.0 < vec.len().
             #[inline]
+            // #need Invariant-popped-expansion
             pub(super) fn frame<'a, Leaf, A: LeafApplicator<Leaf>>
             (&self, vec: &'a mut [Frame<Leaf, A>])
-            -> &'a mut Frame<Leaf, A> { &mut vec[self.0]}
+            -> &'a mut Frame<Leaf, A> {
+                // #use Invariant-popped-expansion
+                &mut vec[self.0]
+            }
         }
 
         pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
@@ -248,82 +284,102 @@ mod norm {
             }];
             // #intro Invariant-Hold-ready
             // #intro Invariant-expansion-owner
+            // #intro Invariant-lower-Brc-free
             Self(q)
         }
 
-        /// Frames below initial top must contain no Brc slots.
-        /// Expands all Brc slots reachable from initial top.
+        /// Expand every Brc slot reachable from initial top.
         ///
         // #need Invariant-Hold-ready
         // #need Invariant-expansion-owner
+        // #need Invariant-lower-Brc-free
         fn expand(&mut self, ator:&A) {
             // #use Invariant-expansion-owner
             let mut idx = self.0.len() - 1;
 
             // Dynamic bound processes appended Frames.
+            //
             // #use Invariant-Hold-ready
             // #use Invariant-expansion-owner
+            // #use Invariant-lower-Brc-free
             while idx < self.0.len() {
+                // #use Invariant-Hold-ready
                 let (lc, rc) = self.0[idx].innr.children(ator);
                 // #elim Invariant-expansion-owner
+                // #intro Invariant-detached-children
 
                 if let Some(innr) = lc {
+                    // #use Invariant-detached-children
                     self.0.push(Frame{src:Some(Ref::left(idx)), innr});
                 }
 
                 if let Some(innr) = rc {
+                    // #use Invariant-detached-children
                     self.0.push(Frame{src:Some(Ref::right(idx)), innr});
                 }
+                // #elim Invariant-detached-children
                 // #intro Invariant-expansion-owner
 
                 idx += 1;
             }
+            // #elim Invariant-lower-Brc-free
+            // #intro Invariant-lower-Brc-free
             // #intro Invariant-reduce-entry
         }
 
         // #need Invariant-Hold-ready
         // #need Invariant-expansion-owner
+        // #need Invariant-lower-Brc-free
         pub(super) fn reduce(mut self, ator:&A) -> Leaf {
-            // Initial Frame has no lower Frames.
+            // #use Invariant-Hold-ready
             // #use Invariant-expansion-owner
+            // #use Invariant-lower-Brc-free
             self.expand(ator);
+            // #intro Invariant-reduce-entry
 
             // #use Invariant-expansion-owner
             // #use Invariant-reduce-entry
             while let Some(Frame {src, innr}) = self.0.pop() {
                 // #elim Invariant-expansion-owner
                 // #elim Invariant-reduce-entry
+                // #intro Invariant-popped-expansion
 
+                // #use Invariant-popped-expansion
                 match innr {
                     InFrame::Task(tsk) => match ator.completed(tsk) {
                         Tree::Lea(o) => match src {
                             Some(rf)
-                            // Pre-pop Ref targets surviving parent None slot.
+                            // #use Invariant-Hold-ready
+                            // #use Invariant-popped-expansion
                             => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
+                            // #elim Invariant-popped-expansion
                             // #intro Invariant-expansion-owner
                             // #intro Invariant-reduce-entry
 
-                            // Popped Frame was sole bottom Frame.
+                            // #use Invariant-popped-expansion
                             None => return o,
+                            // #elim Invariant-popped-expansion
                         },
 
                         Tree::Brc(b) => {
-                            // Replace popped expansion with same src.
+                            // #use Invariant-popped-expansion
                             self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
+                            // #elim Invariant-popped-expansion
                             // #intro Invariant-expansion-owner
 
-                            // Lower Frames remain Brc-free.
+                            // #use Invariant-Hold-ready
                             // #use Invariant-expansion-owner
+                            // #use Invariant-lower-Brc-free
                             self.expand(ator);
+                            // #intro Invariant-reduce-entry
                         },
                     },
 
-                    // Popped top proven Task.
+                    // #use Invariant-popped-expansion
                     _ => unreachable_fast!(),
                 }
             }
 
-            // FrameQ cannot be empty at loop entry.
             // #use Invariant-expansion-owner
             unreachable_fast!()
         }
