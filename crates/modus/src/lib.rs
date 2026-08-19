@@ -94,6 +94,17 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 }
 
 mod norm {
+    // Invariant-Hold-ready:
+    //   Hold is never (Some(Lea(_)), Some(Lea(_))).
+    // Invariant-expansion-owner:
+    //   FrameQ nonempty; Frame 0 alone has src=None.
+    //   Frame i>0 has src=Some(Ref(parent,_)) with parent<i.
+    //   Refs biject non-bottom Frames with parent None slots.
+    //   Each child Frame owns its referenced expansion.
+    // Invariant-reduce-entry:
+    //   No Hold slot contains Brc.
+    //   Top Frame is Task.
+
     mod frame {
         use crate::{Tree, LeafApplicator};
 
@@ -103,7 +114,6 @@ mod norm {
             Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
         }
         impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
-            /// Returns Invariant-Hold-ready.
             pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
                 let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
                 innr.try_task(ator);
@@ -138,8 +148,9 @@ mod norm {
             }
 
             /// Requires referenced parent Hold slot=None.
-            ///
             /// Completes popped child's expansion.
+            ///
+            // #need Invariant-Hold-ready
             pub(super) fn fill_slot(&mut self, rf:Ref, obj:Leaf, ator:&A) {
                 match self {
                     InFrame::Hold(lr) => {
@@ -158,8 +169,7 @@ mod norm {
             }
 
             /// Detach local Brc slots into prospective child Frames.
-            ///
-            /// Detached slots become None. Caller must push every returned child.
+            /// Detached slots become None. Caller pushes every returned child.
             pub(super) fn children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
 
                 fn take_slot<Leaf, A: LeafApplicator<Leaf>>
@@ -224,18 +234,6 @@ mod norm {
     use crate::{LeafApplicator, Tree};
     use frame::{Frame, InFrame, Ref};
 
-    // Invariant-Hold-ready:
-    //   Hold is never (Some(Lea(_)), Some(Lea(_))).
-    //
-    // Invariant-expansion-owner:
-    //   FrameQ nonempty; Frame 0 alone has src=None.
-    //   Frame i>0 has src=Some(Ref(parent,_)) with parent<i.
-    //   Refs biject non-bottom Frames with parent None slots.
-    //   Each child Frame owns its referenced expansion.
-    //
-    // Invariant-reduce-entry:
-    //   At reduce-loop entry, no Hold slot contains Brc.
-    //   Top Frame is Task.
     pub(super) struct FrameQ<Leaf, A: LeafApplicator<Leaf>>
     (Vec<Frame<Leaf, A>>);
 
@@ -245,15 +243,16 @@ mod norm {
                 src:None,
                 innr:InFrame::new(b, ator)
             }];
+            // #intro Invariant-Hold-ready
             // #intro Invariant-expansion-owner
             Self(q)
         }
 
-        /// Requires Invariant-expansion-owner.
         /// Frames below initial top must contain no Brc slots.
-        ///
         /// Expands all Brc slots reachable from initial top.
-        /// Returns Invariant-reduce-entry.
+        ///
+        // #need Invariant-Hold-ready
+        // #need Invariant-expansion-owner
         fn expand(&mut self, ator:&A) {
             // #use Invariant-expansion-owner
             let mut idx = self.0.len() - 1;
@@ -279,6 +278,8 @@ mod norm {
             // #intro Invariant-reduce-entry
         }
 
+        // #need Invariant-Hold-ready
+        // #need Invariant-expansion-owner
         pub(super) fn reduce(mut self, ator:&A) -> Leaf {
             // Initial Frame has no lower Frames.
             // #use Invariant-expansion-owner
