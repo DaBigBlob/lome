@@ -13,6 +13,21 @@ extern crate alloc;
 use alloc::boxed::Box;
 use lome0;
 
+// impl<Leaf, F> lome0::LeafApplicator<Leaf> for F
+// where
+//     F: FnMut(Leaf, Leaf) -> lome0::Tree<Leaf>,
+// {
+//     type ApplicatorTask = lome0::Tree<Leaf>;
+
+//     fn task(&mut self, operator: Leaf, operand: Leaf) -> Self::ApplicatorTask {
+//         self(operator, operand)
+//     }
+
+//     fn completed(&mut self, task: Self::ApplicatorTask) -> lome0::Tree<Leaf> {
+//         task
+//     }
+// }
+
 // constructors do:
 // constructors(constructors) -> constructors
 pub trait ConApplicator<Con> {
@@ -21,6 +36,8 @@ pub trait ConApplicator<Con> {
     fn completed(&mut self, task:Self::ConAppTask) -> Con;
 }
 
+// type App<Con> = AppTree<Box<Leaf<Con>>>;
+
 // we must recognize that we are the Leaf implementors
 #[derive(PartialEq, Eq)]
 pub enum Leaf<Con>{
@@ -28,8 +45,9 @@ pub enum Leaf<Con>{
     App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
     Con(Con)
 }
-
-
+// fn leaf_applicator<Con>(op:Leaf<Con>, x:Leaf<Con>) -> Tree<Leaf<Con>> {
+//     todo!()
+// }
 
 // struct LeafApplicator<Con, CA: ConApplicator<Con>>(CA);
 // impl <Con, CA: ConApplicator<Con>> LeafApplicator<Con, CA> {

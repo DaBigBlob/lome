@@ -54,6 +54,18 @@ pub trait LeafApplicator<Leaf> {
     fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
+/// Eager serial Applicator for functions
+impl<Leaf, Fun: FnMut(Leaf, Leaf) -> Tree<Leaf>>
+LeafApplicator<Leaf> for Fun {
+    type ApplicatorTask = Tree<Leaf>;
+
+    fn task(&mut self, operator: Leaf, operand: Leaf) -> Self::ApplicatorTask
+    {self(operator, operand)}
+
+    fn completed(&mut self, task: Self::ApplicatorTask) -> Tree<Leaf>
+    {task}
+}
+
 /// Principal Expression
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tree<Leaf> {
