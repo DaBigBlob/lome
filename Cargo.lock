@@ -22,6 +22,7 @@ name = "lome-calc"
 version = "0.1.0"
 dependencies = [
  "hashbrown",
+ "lome-modus",
 ]
 
 [[package]]

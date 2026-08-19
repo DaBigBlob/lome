@@ -55,6 +55,7 @@ pub trait LeafApplicator<Leaf> {
 }
 
 /// Principal Expression
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tree<Leaf> {
     /// Leaf
     Lea(Leaf),
@@ -88,14 +89,6 @@ impl <Leaf: fmt::Debug> fmt::Debug for Tree<Leaf> {
                 let (op, x) = (&(*bb).0, &(*bb).1);
                 write!(f, "({op:?}) ({x:?})")
             }
-        }
-    }
-}
-impl <Leaf: Clone> Clone for Tree<Leaf> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Lea(o) => Self::Lea(o.clone()),
-            Self::Brc(bb) => Self::Brc(bb.clone()),
         }
     }
 }

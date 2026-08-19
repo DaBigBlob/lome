@@ -10,4 +10,5 @@ repository.workspace = true
 readme = "README.md"
 
 [dependencies]
+lome-modus = { workspace = true }
 hashbrown = { version = "0.17.1", default-features = false, features = ["default-hasher", "inline-more"] }
