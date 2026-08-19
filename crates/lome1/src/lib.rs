@@ -55,26 +55,21 @@ pub fn lol<Con>(x: lome0::Tree<Leaf<Con>>) -> Leaf<Con> {
 }
 
 pub struct AsLeafApplicator<CA>(pub CA);
+
 impl<
     Con,
-    CA: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>
-> for AsLeafApplicator<CA> {
+    CA: ConApplicator<Con>
+> lome0::LeafApplicator<Leaf<Con>> for AsLeafApplicator<CA> {
     type ApplicatorTask = CA::ConAppTask;
 
-    fn task(
-        &mut self,
-        operator: Leaf<Con>,
-        operand: Leaf<Con>,
-    ) -> Self::ApplicatorTask {
-        // convert Leaf<Con> -> Con as appropriate
+    fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>)
+    -> Self::ApplicatorTask {
         // self.0.task(operator.into(), operand.into())
         todo!()
     }
 
-    fn completed(
-        &mut self,
-        task: Self::ApplicatorTask,
-    ) -> lome0::Tree<Leaf<Con>> {
+    fn completed(&mut self, task:Self::ApplicatorTask)
+    -> lome0::Tree<Leaf<Con>> {
         // Leaf::from(self.0.completed(task)).into()
         todo!()
     }
