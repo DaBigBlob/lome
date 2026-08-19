@@ -34,7 +34,7 @@ use norm::FrameQ;
 /// 1. ApplicatorTask "failure" semantics implementor-local; implementor must
 ///    self-agree. We do not/should not care.
 /// 2. completed() returning
-///    `Tree::Brc(Box::new((Tree::Lea(op), Tree::Lea(x))))` causes naive reapply.
+///    `Brc(Box::new((Lea(op), Lea(x))))` causes naive reapply.
 /// 3. LeafApplicator assumed pure. Actual purity implementor-defined; impurity
 ///    permitted/possibly desired.
 pub trait LeafApplicator<Leaf> {
@@ -67,7 +67,7 @@ impl <Leaf> Tree<Leaf> {
         match self {
             Tree::Lea(lf) => lf,
             Tree::Brc(bb) => {
-                let mut frm = FrameQ::new(*bb, applicator);
+                let frm = FrameQ::new(*bb, applicator);
                 frm.reduce(applicator)
             },
         }
@@ -103,14 +103,16 @@ mod norm {
             Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
         }
         impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
-            /// Establish FrameQ-inv-ready-is-task: Hold(Lea,Lea) -> Task.
+            /// #intro Invariant-(Lea,Lea)->Task
+            /// Hold((Some(Lea(_)),Some(Lea(_)))) -> Task(_).
             pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
                 let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
                 innr.try_task(ator);
                 innr
             }
 
-            /// Internal. Preserve FrameQ-inv-ready-is-task.
+            /// Internal.
+            /// #intro Invariant-(Lea,Lea)->Task
             #[inline]
             fn try_task(&mut self, ator:&A) {
                 match self {
@@ -126,38 +128,38 @@ mod norm {
                             ) => {
                                 *self = Self::Task(ator.apply(op, x));
                             },
-                            // Both just proven Some(Lea); no intervening mutation.
+                            // Both just proven Some(Lea(_)); no mutation.
                             _ => unreachable_fast!()
                         },
                         _ => ()
                     },
-                    // Task: no children, ready.
+                    // Task(_) has no children.
                     InFrame::Task(_) => (),
                 }
             }
 
-            /// Requires selected slot=None; truthful child-parent Ref.
+            /// Requires selected slot=None; truthful Ref.
             ///
-            /// FrameQ-inv-child-slot: parent slot None while child live.
-            /// Fill consumes correspondence.
+            /// #using Invariant-child-slot-None
+            /// #elim Invariant-child-slot-None for this child/slot expansion.
             pub(super) fn fill_slot(&mut self, rf:Ref, obj:Leaf, ator:&A) {
                 match self {
                     InFrame::Hold(lr) => {
                         match rf.slot(lr) {
                             slot @ None => *slot = Some(Tree::Lea(obj)),
-                            Some(_) => unreachable_fast!(), // FrameQ-inv-child-slot
+                            Some(_) => unreachable_fast!(), // #using Invariant-child-slot-None
                         }
-                        self.try_task(ator); // preserve FrameQ-inv-ready-is-task
+                        self.try_task(ator); // #intro Invariant-(Lea,Lea)->Task
                     },
-                    // Child only references parent Hold with detached slot.
-                    InFrame::Task(_) => unreachable_fast!(), // FrameQ-inv-child-slot
+                    // #using Invariant-child-slot-None
+                    InFrame::Task(_) => unreachable_fast!(),
                 }
             }
 
-            /// Extract locally-owned branches to child frames.
+            /// Extract locally-owned Brc(_) to child InFrame.
             ///
-            /// Each child: parent slot=None; child owns extracted computation.
-            /// Caller attaches Ref, completing FrameQ-inv-child-slot.
+            /// Each child: parent slot=None; child owns extracted Tree.
+            /// Caller attaches Ref, completing Invariant-child-slot-None.
             pub(super) fn children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
 
                 fn take_slot<Leaf, A: LeafApplicator<Leaf>>
@@ -165,7 +167,7 @@ mod norm {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
                             Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
-                            // Brc just proven; no intervening mutation.
+                            // Some(Brc(_)) just proven; no mutation.
                             _ => unreachable_fast!(),
                         },
                         _ => None,
@@ -182,10 +184,10 @@ mod norm {
             }
         }
 
-        /// Parent frame + slot computed by child.
+        /// Parent Frame + slot expanded by child Frame.
         ///
-        /// FrameQ-inv-parent-before-child:
-        /// Ref of frame i => self.0 < i.
+        /// Invariant-parent-before-child:
+        /// Ref of Frame at index i => self.0 < i.
         pub(super) struct Ref(usize, bool);
         impl Ref {
             /// Caller asserts idx valid.
@@ -207,10 +209,10 @@ mod norm {
                 }
             }
 
-            /// Get referenced parent frame.
+            /// Get referenced parent Frame.
             ///
-            /// Just-popped child i: parent<i==vec.len()
-            /// by FrameQ-inv-parent-before-child.
+            /// #using Invariant-parent-before-child:
+            /// just-popped Frame at index i => self.0<i==vec.len().
             #[inline]
             pub(super) fn frame<'a, Leaf, A: LeafApplicator<Leaf>>
             (&self, vec: &'a mut [Frame<Leaf, A>])
@@ -218,7 +220,7 @@ mod norm {
         }
 
         pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
-            /// None only root continuation.
+            /// None only for bottom Frame.
             pub(super) src: Option<Ref>,
             pub(super) innr: InFrame<Leaf, A>
         }
@@ -228,35 +230,30 @@ mod norm {
     use crate::{LeafApplicator, Tree};
     use frame::{Frame, InFrame, Ref};
 
-    // FrameQ invariants:
+    // Invariants:
     //
-    // FrameQ-inv-parent-before-child:
-    //   frame i, src=Some(Ref(parent,_)) => parent<i.
+    // Invariant-parent-before-child:
+    //   Frame at index i, src=Some(Ref(parent,_)) => parent<i.
     //
-    // FrameQ-inv-child-slot:
-    //   non-root frame <-> exactly one None parent slot.
-    //   child owns that slot's computation.
+    // Invariant-child-slot-None:
+    //   non-bottom Frame <-> has exactly one None parent slot.
+    //   child Frame owns that slot's expansion.
     //
-    // FrameQ-inv-ready-is-task:
-    //   Hold never has two Lea; Hold(Lea,Lea) immediately -> Task.
+    // Invariant-(Lea,Lea)->Task:
+    //   Hold never has (Some(Lea(_)),Some(Lea(_)));
+    //   that state immediately -> Task(_).
     //
-    // FrameQ-inv-expanded-hold:
-    //   post-expand Hold slots only None|Lea, never Brc;
-    //   every Hold waits on >=1 live child.
+    // Invariant-expand'd-Hold-not-Brc:
+    //   post-expand Hold slots only None|Some(Lea(_)), never Some(Brc(_));
+    //   every Hold waits on >=1 live child Frame.
     //
-    // FrameQ-inv-top-task:
-    //   every reduce-loop entry: final frame Task.
+    // Invariant-top-Task:
+    //   every reduce-loop entry: top Frame has Task(_).
     //
-    // FrameQ-inv-root-continuation:
-    //   every reduce-loop entry: exactly one live src=None root continuation.
-    //   each iteration returns root Lea or leaves live root + nonempty queue.
-    //
-    // Derived:
-    //   child-slot
-    // + parent-before-child
-    // + ready-is-task
-    // + expanded-hold
-    // => top-task.
+    // Invariant-bottom-src-None:
+    //   every reduce-loop entry: exactly one live src=None bottom Frame.
+    //   each iteration returns bottom Lea(_) or leaves live bottom Frame
+    //   + nonempty FrameQ.
     pub(super) struct FrameQ<Leaf, A: LeafApplicator<Leaf>>
     (Vec<Frame<Leaf, A>>);
 
@@ -266,79 +263,89 @@ mod norm {
                 src:None,
                 innr:InFrame::new(b, ator)
             }];
-            // Establish unique root continuation.
+            // #intro Invariant-bottom-src-None
             Self(q)
         }
 
-        /// Requires nonempty queue.
+        /// Requires nonempty FrameQ.
         ///
-        /// Extract all locally-owned Brc reachable from current suffix.
+        /// Extract all locally-owned Brc(_) reachable from current suffix.
         /// Return:
-        ///  - establish expanded-hold;
-        ///  - preserve parent-before-child;
-        ///  - preserve/establish child-slot;
-        ///  - with other invariants establish top-task.
+        ///  - #intro Invariant-expand'd-Hold-not-Brc
+        ///  - preserve Invariant-parent-before-child
+        ///  - preserve/#intro Invariant-child-slot-None
+        ///  - #intro Invariant-top-Task
         fn expand(&mut self, ator:&A) {
             // Nonempty call sites:
             //  - initial FrameQ::new;
-            //  - returned Brc after replacement push.
+            //  - Brc(_) after replacement push.
             let mut idx = self.0.len() - 1;
             while idx < self.0.len() {
                 let (lc, rc) = self.0[idx].innr.children(ator);
 
                 if let Some(innr) = lc {
-                    // detach left Brc => parent slot=None;
-                    // push child strictly after parent.
+                    // detach left Brc(_) => parent slot=None.
+                    // push child Frame strictly after parent Frame.
                     self.0.push(Frame{src:Some(Ref::left(idx)), innr});
-                    // establish child's parent-before-child + child-slot.
+                    // #intro Invariant-parent-before-child
+                    // #intro Invariant-child-slot-None
                 }
 
                 if let Some(innr) = rc {
-                    // same right.
+                    // same for right.
                     self.0.push(Frame{src:Some(Ref::right(idx)), innr});
-                    // establish child's parent-before-child + child-slot.
+                    // #intro Invariant-parent-before-child
+                    // #intro Invariant-child-slot-None
                 }
 
                 idx += 1;
             }
-            // No live Hold has local Brc => expanded-hold.
+
+            // No live Hold has local Brc(_).
+            // #intro Invariant-expand'd-Hold-not-Brc
             //
-            // Hold cannot have two Lea (ready-is-task), so topmost Hold has None.
-            // child-slot => live child above it, contradiction.
-            // Therefore top frame Task => top-task.
+            // #using Invariant-(Lea,Lea)->Task:
+            // top Hold => >=1 None.
+            // #using Invariant-child-slot-None:
+            // None => live child Frame above; contradiction.
+            // #intro Invariant-top-Task
         }
 
-        pub(super) fn reduce(&mut self, ator:&A) -> Leaf {
+        pub(super) fn reduce(mut self, ator:&A) -> Leaf {
             self.expand(ator);
 
             while let Some(Frame {src, innr}) = self.0.pop() {match innr {
-                // FrameQ-inv-top-task
+                // #using Invariant-top-Task
                 InFrame::Task(tsk) => match ator.completed(tsk) {
                     Tree::Lea(o) => match src {
                         Some(rf)
-                        // parent-before-child => parent survives child pop;
-                        // child-slot => referenced slot=None.
+                        // #using Invariant-parent-before-child:
+                        // parent Frame survives child Frame pop.
+                        // #using Invariant-child-slot-None:
+                        // referenced slot=None.
                         => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
 
-                        // root continuation complete.
+                        // #elim Invariant-bottom-src-None
                         None => return o,
                     },
 
                     Tree::Brc(b) => {
-                        // Replace computation; preserve continuation/src.
+                        // Replace expansion; preserve src.
                         self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
 
-                        // Re-establish expanded-hold/top-task.
+                        // #elim Invariant-expand'd-Hold-not-Brc
+                        // #elim Invariant-top-Task
                         self.expand(ator);
+                        // #intro Invariant-expand'd-Hold-not-Brc
+                        // #intro Invariant-top-Task
                     },
                 },
 
-                _ => unreachable_fast!(), // FrameQ-inv-top-task
+                _ => unreachable_fast!(), // #using Invariant-top-Task
             }}
 
-            // Non-root completion leaves parent.
-            // Root completion returns or pushes replacement root.
-            unreachable_fast!() // FrameQ-inv-root-continuation
+            // #using Invariant-bottom-src-None
+            unreachable_fast!()
         }
     }
 }
