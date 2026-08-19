@@ -28,7 +28,7 @@ pub trait ConApplicator<Con> {
 // we must recognize that we are the Leaf implementors
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
-    App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
+    App(Box<lome0::Tree<Leaf<Con>>>), // we impl apply for this
     Con(Con)
 }
 pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
