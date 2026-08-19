@@ -10,17 +10,17 @@
 )]
 
 extern crate alloc;
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::boxed::Box;
 use lome0 as modus;
 
-type App<T> = modus::Tree<T>;
+type App<M> = modus::Tree<M>;
 
 // in PTS outside, types, kinda, ... (axioms) will be constructors
 
-/// Abstraction
+/// Expression: Abstraction + Application
 #[derive(PartialEq, Eq)]
-pub enum Expr{
-    App(Box<App<Expr>>),
-    Con{face:String, args:Vec<Expr>}, // constructor
-    Err(Box<(Expr, Expr)>) // failed application
+pub enum Tree<Leaf>{
+    Abs(Box<(Tree<Leaf>, Tree<Leaf>)>),
+    App(Box<App<Tree<Leaf>>>),
+    Lea(Leaf),
 }
