@@ -49,9 +49,9 @@ fn leaf_applicator<Con>(op:Leaf<Con>, x:Leaf<Con>) -> lome0::Tree<Leaf<Con>> {
     todo!()
 }
 
-// pub fn lol<Con>(x: lome0::Tree<Leaf<Con>>) -> Leaf<Con> {
-//     x.norm(&mut leaf_applicator)
-// }
+pub fn lol<Con>(x: lome0::Tree<Leaf<Con>>) -> Leaf<Con> {
+    x.norm(&mut (leaf_applicator, (|x| x)))
+}
 
 // struct LeafApplicator<Con, CA: ConApplicator<Con>>(CA);
 // impl <Con, CA: ConApplicator<Con>> LeafApplicator<Con, CA> {
