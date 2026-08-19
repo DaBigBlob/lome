@@ -14,9 +14,9 @@ use alloc::boxed::Box;
 use lome0;
 
 pub trait ConApplicator<Con> {
-    type ConAppTask;
-    fn task(&mut self, operator:Con, operand:Con) -> Self::ConAppTask;
-    fn completed(&mut self, task:Self::ConAppTask) -> Con;
+    type ConTask;
+    fn task(&mut self, operator:Con, operand:Con) -> Self::ConTask;
+    fn completed(&mut self, task:Self::ConTask) -> Con;
 }
 
 // type App<Con> = AppTree<Box<Leaf<Con>>>;
@@ -34,16 +34,16 @@ impl <Con> Tree<Con> {
     }
 }
 
-mod norm {
+mod applicator {
 use crate::{ConApplicator, Leaf};
 
 pub(super) struct LeafApplicator<From>(pub From);
 
 impl<Con, A: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
 for LeafApplicator<A> {
-    type ApplicatorTask = A::ConAppTask;
+    type ApplicatorTask = A::ConTask;
 
-    fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>)
+    fn task(&mut self, _operator:Leaf<Con>, _operand:Leaf<Con>)
     -> Self::ApplicatorTask {
         // self.0.task(operator.into(), operand.into())
         todo!()
