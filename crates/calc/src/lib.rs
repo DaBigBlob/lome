@@ -19,11 +19,11 @@ pub struct Applicator;
 impl modus::LeafApplicator<Abs> for Applicator {
     type ApplicatorTask = (Abs, Abs);
 
-    fn task(&self, operator:Abs, operand:Abs) -> Self::ApplicatorTask {
+    fn task(&mut self, operator:Abs, operand:Abs) -> Self::ApplicatorTask {
         todo!()
     }
 
-    fn completed(&self, task:Self::ApplicatorTask) -> lome_modus::Tree<Abs> {
+    fn completed(&mut self, task:Self::ApplicatorTask) -> lome_modus::Tree<Abs> {
         todo!()
     }
 }

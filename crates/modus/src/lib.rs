@@ -48,10 +48,10 @@ pub trait LeafApplicator<Leaf> {
     type ApplicatorTask;
 
     /// Begin or schedule `operator operand`.
-    fn task(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
+    fn task(&mut self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
 
     /// Wait for or execute `task`, then return its application result.
-    fn completed(&self, task:Self::ApplicatorTask) -> Tree<Leaf>;
+    fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
 /// Principal Expression
@@ -71,7 +71,7 @@ impl <Leaf> From<(Tree<Leaf>, Tree<Leaf>)> for Tree<Leaf> {
     }
 }
 impl <Leaf> Tree<Leaf> {
-    pub fn norm<A: LeafApplicator<Leaf>>(self, applicator:&A) -> Leaf {
+    pub fn norm<A: LeafApplicator<Leaf>>(self, applicator:&mut A) -> Leaf {
         match self {
             Tree::Lea(lf) => lf,
             Tree::Brc(bb) => {
@@ -114,7 +114,7 @@ pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
     Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
 }
 impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
-    pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
+    pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&mut A) -> Self {
         let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
         innr.try_task(ator);
         innr
@@ -122,7 +122,7 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
 
     /// try Hold -> Task.
     #[inline]
-    fn try_task(&mut self, ator:&A) {
+    fn try_task(&mut self, ator:&mut A) {
         match self {
             InFrame::Hold((l, r))
             => match (&*l, &*r) {
@@ -144,7 +144,7 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
         }
     }
 
-    pub(super) fn fill_slot(&mut self, self_ref:Ref, with:Leaf, ator:&A) {
+    pub(super) fn fill_slot(&mut self, self_ref:Ref, with:Leaf, ator:&mut A) {
         match self {
             InFrame::Hold(lr) => {
                 match self_ref.slot(lr) {
@@ -161,10 +161,10 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
         }
     }
 
-    pub(super) fn pop_children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
+    pub(super) fn pop_children(&mut self, ator:&mut A) -> (Option<Self>, Option<Self>) {
 
         fn slot2child<Leaf, A: LeafApplicator<Leaf>>
-        (slot: &mut Option<Tree<Leaf>>, ator:&A) -> Option<InFrame<Leaf, A>> {
+        (slot: &mut Option<Tree<Leaf>>, ator:&mut A) -> Option<InFrame<Leaf, A>> {
             match &*slot {
                 Some(Tree::Brc(_)) => match slot.take() {
                     Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
@@ -224,12 +224,12 @@ pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
     (Vec<Frame<Leaf, A>>);
 
     impl <Leaf, A: LeafApplicator<Leaf>> FrameQ<Leaf, A> {
-        pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
+        pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&mut A) -> Self {
             let q = alloc::vec![Frame{src:None, innr:InFrame::new(b, ator)}];
             Self(q)
         }
 
-        fn expand(&mut self, ator:&A) {
+        fn expand(&mut self, ator:&mut A) {
             // alwys have >=1 frame unless self dropped
             let mut idx = self.0.len() - 1;
             while idx < self.0.len() {
@@ -244,7 +244,7 @@ pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
             }
         }
 
-        pub(super) fn reduce(mut self, ator:&A) -> Leaf {
+        pub(super) fn reduce(mut self, ator:&mut A) -> Leaf {
             self.expand(ator); // reduce without expand is undefined
 
             // we take top
