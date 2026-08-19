@@ -26,11 +26,5 @@ pub trait ConApplicator<Con> {
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
     App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
-    ConTree(Con)
+    Con(Con)
 }
-// norm:
-// keep normalizing Leaf::App(lome0::Tree<Box<Leaf<Con>>>) to Leaf
-// till we reach Leaf::ConTree - which is pure lome0::Tree<Con>
-// then we call normalize with applicator from above
-
-// we also do norm (to ConTree) during task() an
