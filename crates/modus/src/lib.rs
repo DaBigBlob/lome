@@ -35,18 +35,38 @@ use core::fmt;
 use alloc::boxed::Box;
 use norm::FrameQ;
 
-/// 1. ApplicatorTask failure semantics implementor-local; self-consistency
-///    required. We do not/should not care.
-/// 2. completed() returning
-///    `Brc(Box::new((Lea(op), Lea(x))))` causes naive reapply.
-/// 3. If completed(apply(operator, operand)) observationally depends only on
-///    operator and operand, normalization is schedule-independent.
-///    Otherwise semantics may depend on scheduling and completion order.
+/// Performs applications of Leaf operators to Leaf operands.
+///
+/// Application failure semantics are implementor-local. The implementor must
+/// use them consistently; the normalizer treats every returned Tree uniformly.
+///
+/// Returning `Tree::Brc(Box::new((Tree::Lea(operator), Tree::Lea(operand))))`
+/// causes (eventual) naive reapplication.
+///
+/// If each completed application observationally depends only on its operator
+/// and operand, normalization is schedule-independent. Otherwise behavior may
+/// depend on scheduling and execution order.
+///
+/// Task protocol:
+/// 1. Multiple ApplicatorTasks may coexist.
+/// 2. apply() must remain usable while earlier ApplicatorTasks are outstanding.
+/// 3. Later calls must not invalidate earlier ApplicatorTasks.
+/// 4. ApplicatorTasks may be passed to completed() in unspecified order.
+/// 5. completed() consumes exactly one ApplicatorTask and returns the result of
+///    the exact application represented by that task.
+/// 6. completed() may wait for or execute the represented application.
+/// 7. Dropping an ApplicatorTask without calling completed() must safely cancel,
+///    detach, or discard it. This may occur during unwinding.
+/// 8. ApplicatorTask need not be Send; handles remain on the normalization
+///    thread.
 pub trait LeafApplicator<Leaf> {
+    /// Owned handle for one application.
     type ApplicatorTask;
-    /// Begin/schedule application, perhaps elsewhere/thread.
+
+    /// Begin or schedule `operator operand`.
     fn apply(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
-    /// Wait/get application result.
+
+    /// Wait for or execute `task`, then return its application result.
     fn completed(&self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
