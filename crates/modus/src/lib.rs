@@ -13,20 +13,14 @@
     clippy::explicit_auto_deref
 )]
 
-macro_rules! unreachable_fast {
-    () => {{
+macro_rules! unreachable_unchecked_fast {
+    ($($arg:tt)*) => {{
         #[cfg(debug_assertions)]
-        { unreachable!() }
+        { unreachable!($($arg)*) }
+
         #[cfg(not(debug_assertions))]
         // SAFETY: each call site proves unreachable.
-        unsafe {core::hint::unreachable_unchecked()}
-    }};
-    ($($arg:tt)+) => {{
-        #[cfg(debug_assertions)]
-        { unreachable!($($arg)+) }
-        #[cfg(not(debug_assertions))]
-        // SAFETY: each call site proves unreachable.
-        unsafe {core::hint::unreachable_unchecked()}
+        unsafe { core::hint::unreachable_unchecked() }
     }};
 }
 
@@ -118,7 +112,7 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 
 mod norm {
 mod frame {
-use crate::{Tree, LeafApplicator};
+use crate::{LeafApplicator, Tree};
 
 /// DONT CONSTRUCT RAW: use InFrame::new().
 pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
@@ -148,7 +142,7 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
                     ) => {
                         *self = Self::Task(ator.apply(op, x));
                     },
-                    _ => unreachable_fast!("trivial")
+                    _ => unreachable_unchecked_fast!("Same Branch.")
                 },
                 _ => ()
             },
@@ -161,13 +155,13 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
             InFrame::Hold(lr) => {
                 match self_ref.slot(lr) {
                     slot @ None => *slot = Some(Tree::Lea(with)),
-                    Some(_) => unreachable_fast!(
+                    Some(_) => unreachable!(
                         "Caller guarantees the referenced slot is None."
                     ),
                 }
                 self.try_task(ator);
             },
-            InFrame::Task(_) => unreachable_fast!(
+            InFrame::Task(_) => unreachable!(
                 "A referenced parent slot can exist only in Hold."
             ),
         }
@@ -180,7 +174,7 @@ impl <Leaf, A: LeafApplicator<Leaf>> InFrame<Leaf, A> {
             match &*slot {
                 Some(Tree::Brc(_)) => match slot.take() {
                     Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
-                    _ => unreachable_fast!("trivial"),
+                    _ => unreachable_unchecked_fast!("Same Branch."),
                 },
                 _ => None,
             }
@@ -278,11 +272,11 @@ pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
                         self.expand(ator);
                     },
                 },
-                _ => unreachable_fast!(
+                _ => unreachable!(
                     "expand() and each non-returning iteration leave top Task."
                 ),
             }}
-            unreachable_fast!(
+            unreachable!(
                 "The bottom Frame remains until it returns a leaf."
             )
         }
