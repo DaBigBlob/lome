@@ -54,16 +54,20 @@ pub trait LeafApplicator<Leaf> {
     fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
-/// Eager serial applicator for functions
-impl<Leaf, Fun: FnMut(Leaf, Leaf) -> Tree<Leaf>>
-LeafApplicator<Leaf> for Fun {
-    type ApplicatorTask = Tree<Leaf>;
+/// Eager serial applicator for (ToTask, FromTask) function tuple
+impl<
+    Leaf,
+    Task,
+    ToTask:Fn(Leaf, Leaf) -> Task,
+    FromTask:Fn(Task) -> Tree<Leaf>
+> LeafApplicator<Leaf> for (ToTask, FromTask) {
+    type ApplicatorTask = Task;
 
     fn task(&mut self, operator: Leaf, operand: Leaf) -> Self::ApplicatorTask
-    {self(operator, operand)}
+    {self.0(operator, operand)}
 
     fn completed(&mut self, task: Self::ApplicatorTask) -> Tree<Leaf>
-    {task}
+    {self.1(task)}
 }
 
 /// Principal Expression

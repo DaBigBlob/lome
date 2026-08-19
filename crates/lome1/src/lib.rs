@@ -45,8 +45,12 @@ pub enum Leaf<Con>{
     App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
     Con(Con)
 }
-// fn leaf_applicator<Con>(op:Leaf<Con>, x:Leaf<Con>) -> Tree<Leaf<Con>> {
-//     todo!()
+fn leaf_applicator<Con>(op:Leaf<Con>, x:Leaf<Con>) -> lome0::Tree<Leaf<Con>> {
+    todo!()
+}
+
+// pub fn lol<Con>(x: lome0::Tree<Leaf<Con>>) -> Leaf<Con> {
+//     x.norm(&mut leaf_applicator)
 // }
 
 // struct LeafApplicator<Con, CA: ConApplicator<Con>>(CA);
