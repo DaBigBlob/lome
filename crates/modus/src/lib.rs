@@ -94,13 +94,16 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 }
 
 mod norm {
+    // ///INVARIANTS///
     // Invariant-Hold-ready:
     //   Hold is never (Some(Lea(_)), Some(Lea(_))).
+    //
     // Invariant-expansion-owner:
     //   FrameQ nonempty; Frame 0 alone has src=None.
     //   Frame i>0 has src=Some(Ref(parent,_)) with parent<i.
     //   Refs biject non-bottom Frames with parent None slots.
     //   Each child Frame owns its referenced expansion.
+    //
     // Invariant-reduce-entry:
     //   No Hold slot contains Brc.
     //   Top Frame is Task.
