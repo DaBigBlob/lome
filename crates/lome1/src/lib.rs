@@ -13,23 +13,6 @@ extern crate alloc;
 use alloc::boxed::Box;
 use lome0;
 
-// impl<Leaf, F> lome0::LeafApplicator<Leaf> for F
-// where
-//     F: FnMut(Leaf, Leaf) -> lome0::Tree<Leaf>,
-// {
-//     type ApplicatorTask = lome0::Tree<Leaf>;
-
-//     fn task(&mut self, operator: Leaf, operand: Leaf) -> Self::ApplicatorTask {
-//         self(operator, operand)
-//     }
-
-//     fn completed(&mut self, task: Self::ApplicatorTask) -> lome0::Tree<Leaf> {
-//         task
-//     }
-// }
-
-// constructors do:
-// constructors(constructors) -> constructors
 pub trait ConApplicator<Con> {
     type ConAppTask;
     fn task(&mut self, operator:Con, operand:Con) -> Self::ConAppTask;
@@ -39,25 +22,26 @@ pub trait ConApplicator<Con> {
 // type App<Con> = AppTree<Box<Leaf<Con>>>;
 
 // we must recognize that we are the Leaf implementors
-#[derive(PartialEq, Eq)]
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
     App(lome0::Tree<Box<Leaf<Con>>>), // we impl apply for this
     Con(Con)
 }
-fn leaf_applicator<Con>(op:Leaf<Con>, x:Leaf<Con>) -> lome0::Tree<Leaf<Con>> {
-    todo!()
+pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
+impl <Con> Tree<Con> {
+    pub fn norm<A: ConApplicator<Con>>(self, applicator:&mut A) -> Con {
+        todo!()
+    }
 }
 
-pub fn lol<Con>(x: lome0::Tree<Leaf<Con>>) -> Leaf<Con> {
-    // x.norm(&mut (leaf_applicator, |k| k))
-    x.norm(&mut (|k, j| (k, j), |(m, n)| leaf_applicator(m, n)))
-}
+mod norm {
+use crate::{ConApplicator, Leaf};
 
-struct LeafApplicator<From>(pub From);
-impl<Con, ConApp: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
-for LeafApplicator<ConApp> {
-    type ApplicatorTask = ConApp::ConAppTask;
+pub(super) struct LeafApplicator<From>(pub From);
+
+impl<Con, A: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
+for LeafApplicator<A> {
+    type ApplicatorTask = A::ConAppTask;
 
     fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>)
     -> Self::ApplicatorTask {
@@ -65,26 +49,9 @@ for LeafApplicator<ConApp> {
         todo!()
     }
 
-    fn completed(&mut self, task:Self::ApplicatorTask)
-    -> lome0::Tree<Leaf<Con>> {
-        // Leaf::from(self.0.completed(task)).into()
-        todo!()
-    }
+    fn completed(&mut self, task:Self::ApplicatorTask) -> lome0::Tree<Leaf<Con>>
+    {lome0::Tree::Lea(Leaf::Con(self.0.completed(task)))}
 }
-// impl <Con, CA: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>> for CA {}
 
-// struct LeafApplicator<Con, CA: ConApplicator<Con>>(CA);
-// impl <Con, CA: ConApplicator<Con>> LeafApplicator<Con, CA> {
-//     new
-// }
-// impl <Con, CA: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>> for LeafApplicator {
-//     type ApplicatorTask = CA::ConAppTask;
 
-//     fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>) -> Self::ApplicatorTask {
-//         todo!()
-//     }
-
-//     fn completed(&mut self, task:Self::ApplicatorTask) -> lome0::Tree<Leaf<Con>> {
-//         todo!()
-//     }
-// }
+}
