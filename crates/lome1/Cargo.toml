@@ -1,6 +1,6 @@
 [package]
-name = "lome-lang"
-description = "Lome Core Language"
+name = "lome1"
+description = ""
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,4 +10,5 @@ repository.workspace = true
 readme = "README.md"
 
 [dependencies]
-lome-calc = { workspace = true }
+lome0 = { workspace = true }
+hashbrown = { version = "0.17.1", default-features = false, features = ["default-hasher", "inline-more"] }

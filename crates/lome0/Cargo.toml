@@ -1,6 +1,6 @@
 [package]
-name = "lome-modus"
-description = "Lome Core Modus Ponens: no_std High Perfoemance Call-by-Value Modus Ponens"
+name = "lome0"
+description = ""
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

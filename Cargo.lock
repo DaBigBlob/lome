@@ -18,20 +18,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "lome-calc"
+name = "lome0"
+version = "0.1.0"
+
+[[package]]
+name = "lome1"
 version = "0.1.0"
 dependencies = [
  "hashbrown",
- "lome-modus",
+ "lome0",
 ]
-
-[[package]]
-name = "lome-lang"
-version = "0.1.0"
-dependencies = [
- "lome-calc",
-]
-
-[[package]]
-name = "lome-modus"
-version = "0.1.0"

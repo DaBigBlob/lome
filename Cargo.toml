@@ -1,11 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["crates/calc", "crates/lang", "crates/modus"]
+members = ["crates/lome0", "crates/lome1"]
 
 [workspace.dependencies]
-lome-modus = { version = "0.1.0", path = "crates/modus" }
-lome-calc = { version = "0.1.0", path = "crates/calc" }
-lome-lang = { version = "0.1.0", path = "crates/lang" }
+lome0 = { version = "0.1.0", path = "crates/lome0" }
+lome1 = { version = "0.1.0", path = "crates/lome1" }
 
 [workspace.package]
 version = "0.1.0"
@@ -13,7 +12,7 @@ edition = "2024"
 rust-version = "1.85"
 license = "BSD-3-Clause"
 authors = ["Hans S. <hans@0x8.io>"]
-description = "Lome: Pure Type System implemented as Lambda-Typed-Lambda-Calculus implemented as Call-by-Value Pattern Calculus with Pattern-Enforced-Equality"
+description = ""
 repository = "https://github.com/DaBigBlob/lome"
 readme = "README.md"
 
