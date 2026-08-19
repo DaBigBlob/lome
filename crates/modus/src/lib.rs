@@ -16,13 +16,17 @@
 macro_rules! unreachable_fast {
     () => {{
         #[cfg(debug_assertions)]
-        { unreachable!()}
-
+        { unreachable!() }
         #[cfg(not(debug_assertions))]
         // SAFETY: each call site proves unreachable.
-        unsafe {
-            core::hint::unreachable_unchecked()
-        }
+        unsafe {core::hint::unreachable_unchecked()}
+    }};
+    ($($arg:tt)+) => {{
+        #[cfg(debug_assertions)]
+        { unreachable!($($arg)+) }
+        #[cfg(not(debug_assertions))]
+        // SAFETY: each call site proves unreachable.
+        unsafe {core::hint::unreachable_unchecked()}
     }};
 }
 
@@ -40,10 +44,8 @@ use norm::FrameQ;
 ///    Otherwise semantics may depend on scheduling and completion order.
 pub trait LeafApplicator<Leaf> {
     type ApplicatorTask;
-
     /// Begin/schedule application, perhaps elsewhere/thread.
     fn apply(&self, operator:Leaf, operand:Leaf) -> Self::ApplicatorTask;
-
     /// Wait/get application result.
     fn completed(&self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
@@ -95,38 +97,10 @@ impl <Leaf: Clone> Clone for Tree<Leaf> {
 }
 
 mod norm {
-    // ///INVARIANTS///
-    // Invariant-Hold-ready:
-    //   Hold is never (Some(Lea(_)), Some(Lea(_))).
-    //
-    // Invariant-expansion-owner:
-    //   FrameQ nonempty; Frame 0 alone has src=None.
-    //   Frame i>0 has src=Some(Ref(parent,_)) with parent<i.
-    //   Refs biject non-bottom Frames with parent None slots.
-    //   Each child Frame owns its referenced expansion.
-    //
-    // Invariant-lower-Brc-free:
-    //   Every Frame below top has no Hold Brc slot.
-    //
-    // Invariant-reduce-entry:
-    //   No Hold slot contains Brc.
-    //   Top Frame is Task.
-    //
-    // Invariant-detached-children:
-    //   Returned children own exactly the Brc slots just detached from
-    //   Frame idx. Previous expansion ownership remains valid.
-    //
-    // Invariant-popped-expansion:
-    //   Popped Frame was top Task.
-    //   Every remaining Hold slot is Brc-free.
-    //   src=Some(rf) => rf references a surviving parent Hold None slot;
-    //   all other expansion ownership remains valid.
-    //   src=None => remaining FrameQ empty.
-
     mod frame {
         use crate::{Tree, LeafApplicator};
 
-        /// Construct only through InFrame::new().
+        /// DONT CONSTRUCT RAW: use InFrame::new().
         pub(super) enum InFrame<Leaf, A: LeafApplicator<Leaf>>{
             Task(A::ApplicatorTask),
             Hold((Option<Tree<Leaf>>, Option<Tree<Leaf>>))
@@ -135,11 +109,10 @@ mod norm {
             pub(super) fn new(b: (Tree<Leaf>, Tree<Leaf>), ator:&A) -> Self {
                 let mut innr = InFrame::Hold((Some(b.0), Some(b.1)));
                 innr.try_task(ator);
-                // #intro Invariant-Hold-ready
                 innr
             }
 
-            /// Convert ready Hold to Task.
+            /// try Hold -> Task.
             #[inline]
             fn try_task(&mut self, ator:&A) {
                 match self {
@@ -155,52 +128,39 @@ mod norm {
                             ) => {
                                 *self = Self::Task(ator.apply(op, x));
                             },
-                            // Both proven Some(Lea(_)); no intervening mutation.
-                            _ => unreachable_fast!()
+                            _ => unreachable_fast!("trivial")
                         },
                         _ => ()
                     },
-                    // Task has no slots.
                     InFrame::Task(_) => (),
                 }
             }
 
-            /// Complete popped child's expansion.
-            ///
-            // #need Invariant-Hold-ready
-            // #need Invariant-popped-expansion
-            pub(super) fn fill_slot(&mut self, rf:Ref, obj:Leaf, ator:&A) {
-                // #use Invariant-popped-expansion
+            pub(super) fn fill_slot(&mut self, self_ref:Ref, with:Leaf, ator:&A) {
                 match self {
                     InFrame::Hold(lr) => {
-                        // #use Invariant-popped-expansion
-                        match rf.slot(lr) {
-                            slot @ None => *slot = Some(Tree::Lea(obj)),
-                            Some(_) => unreachable_fast!(),
+                        match self_ref.slot(lr) {
+                            slot @ None => *slot = Some(Tree::Lea(with)),
+                            Some(_) => unreachable_fast!(
+                                "Caller guarantees the referenced slot is None."
+                            ),
                         }
-                        // #elim Invariant-popped-expansion
-                        // #elim Invariant-Hold-ready
-
                         self.try_task(ator);
-                        // #intro Invariant-Hold-ready
                     },
-                    InFrame::Task(_) => unreachable_fast!(),
+                    InFrame::Task(_) => unreachable_fast!(
+                        "A referenced parent slot can exist only in Hold."
+                    ),
                 }
             }
 
-            /// Detach local Brc slots into prospective child Frames.
-            /// Detached slots become None. Caller pushes every returned child.
-            ///
-            // #need Invariant-Hold-ready
-            pub(super) fn children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
+            pub(super) fn pop_children(&mut self, ator:&A) -> (Option<Self>, Option<Self>) {
 
-                fn take_slot<Leaf, A: LeafApplicator<Leaf>>
+                fn slot2child<Leaf, A: LeafApplicator<Leaf>>
                 (slot: &mut Option<Tree<Leaf>>, ator:&A) -> Option<InFrame<Leaf, A>> {
                     match &*slot {
                         Some(Tree::Brc(_)) => match slot.take() {
                             Some(Tree::Brc(b)) => Some(InFrame::new(*b, ator)),
-                            // Some(Brc(_)) proven; no intervening mutation.
-                            _ => unreachable_fast!(),
+                            _ => unreachable_fast!("trivial"),
                         },
                         _ => None,
                     }
@@ -209,8 +169,8 @@ mod norm {
                 match self {
                     InFrame::Task(_) => (None, None),
                     InFrame::Hold((l, r)) => (
-                        take_slot(l, ator),
-                        take_slot(r, ator)
+                        slot2child(l, ator),
+                        slot2child(r, ator)
                     )
                 }
             }
@@ -219,23 +179,12 @@ mod norm {
         /// Parent Frame and expanded slot.
         pub(super) struct Ref(usize, bool);
         impl Ref {
-            /// Construct right-slot Ref for detached child.
+            /// Caller ensures idx is valid.
             #[inline]
-            // #need Invariant-detached-children
-            pub(super) fn right(idx: usize) -> Self {
-                // #use Invariant-detached-children
-                Self(idx, true)
-            }
-
-            /// Construct left-slot Ref for detached child.
+            pub(super) fn right(idx: usize) -> Self {Self(idx, true)}
+            /// Caller ensures idx is valid.
             #[inline]
-            // #need Invariant-detached-children
-            pub(super) fn left(idx: usize) -> Self {
-                // #use Invariant-detached-children
-                Self(idx, false)
-            }
-
-            /// Select parent slot.
+            pub(super) fn left(idx: usize) -> Self {Self(idx, false)}
             #[inline]
             pub(super) fn slot<'a, Leaf>
             (&self, frm: &'a mut (Option<Tree<Leaf>>, Option<Tree<Leaf>>))
@@ -245,19 +194,14 @@ mod norm {
                     false => &mut frm.0,
                 }
             }
-
             #[inline]
-            // #need Invariant-popped-expansion
             pub(super) fn frame<'a, Leaf, A: LeafApplicator<Leaf>>
             (&self, vec: &'a mut [Frame<Leaf, A>])
-            -> &'a mut Frame<Leaf, A> {
-                // #use Invariant-popped-expansion
-                &mut vec[self.0]
-            }
+            -> &'a mut Frame<Leaf, A> { &mut vec[self.0]}
         }
 
         pub(super) struct Frame<Leaf, A: LeafApplicator<Leaf>> {
-            /// None only for bottom Frame.
+            /// None only for the bottom Frame.
             pub(super) src: Option<Ref>,
             pub(super) innr: InFrame<Leaf, A>
         }
@@ -276,106 +220,45 @@ mod norm {
                 src:None,
                 innr:InFrame::new(b, ator)
             }];
-            // #intro Invariant-Hold-ready
-            // #intro Invariant-expansion-owner
-            // #intro Invariant-lower-Brc-free
             Self(q)
         }
 
-        /// Expand every Brc slot reachable from initial top.
-        ///
-        // #need Invariant-Hold-ready
-        // #need Invariant-expansion-owner
-        // #need Invariant-lower-Brc-free
         fn expand(&mut self, ator:&A) {
-            // #use Invariant-expansion-owner
-            // #use Invariant-lower-Brc-free
             let mut idx = self.0.len() - 1;
-            // #elim Invariant-lower-Brc-free
-
-            // Dynamic bound processes appended Frames.
-            //
-            // #use Invariant-Hold-ready
-            // #use Invariant-expansion-owner
             while idx < self.0.len() {
-                // #use Invariant-Hold-ready
-                let (lc, rc) = self.0[idx].innr.children(ator);
-                // #elim Invariant-expansion-owner
-                // #intro Invariant-detached-children
-
+                let (lc, rc) = self.0[idx].innr.pop_children(ator);
                 if let Some(innr) = lc {
-                    // #use Invariant-detached-children
                     self.0.push(Frame{src:Some(Ref::left(idx)), innr});
                 }
-
                 if let Some(innr) = rc {
-                    // #use Invariant-detached-children
                     self.0.push(Frame{src:Some(Ref::right(idx)), innr});
                 }
-                // #elim Invariant-detached-children
-                // #intro Invariant-expansion-owner
-
                 idx += 1;
             }
-            // #intro Invariant-lower-Brc-free
-            // #intro Invariant-reduce-entry
         }
 
-        // #need Invariant-Hold-ready
-        // #need Invariant-expansion-owner
-        // #need Invariant-lower-Brc-free
         pub(super) fn reduce(mut self, ator:&A) -> Leaf {
-            // #use Invariant-Hold-ready
-            // #use Invariant-expansion-owner
-            // #use Invariant-lower-Brc-free
-            self.expand(ator);
-            // #intro Invariant-reduce-entry
+            self.expand(ator); // reduce without expand is undefined
 
-            // #use Invariant-expansion-owner
-            // #use Invariant-reduce-entry
-            while let Some(Frame {src, innr}) = self.0.pop() {
-                // #elim Invariant-expansion-owner
-                // #elim Invariant-reduce-entry
-                // #intro Invariant-popped-expansion
-
-                // #use Invariant-popped-expansion
-                match innr {
-                    InFrame::Task(tsk) => match ator.completed(tsk) {
-                        Tree::Lea(o) => match src {
-                            Some(rf)
-                            // #use Invariant-Hold-ready
-                            // #use Invariant-popped-expansion
-                            => rf.frame(&mut self.0).innr.fill_slot(rf, o, ator),
-                            // #elim Invariant-popped-expansion
-                            // #intro Invariant-expansion-owner
-                            // #intro Invariant-reduce-entry
-
-                            // #use Invariant-popped-expansion
-                            None => return o,
-                            // #elim Invariant-popped-expansion
-                        },
-
-                        Tree::Brc(b) => {
-                            // #use Invariant-popped-expansion
-                            self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
-                            // #elim Invariant-popped-expansion
-                            // #intro Invariant-expansion-owner
-
-                            // #use Invariant-Hold-ready
-                            // #use Invariant-expansion-owner
-                            // #use Invariant-lower-Brc-free
-                            self.expand(ator);
-                            // #intro Invariant-reduce-entry
-                        },
+            while let Some(Frame {src, innr}) = self.0.pop() {match innr {
+                InFrame::Task(tsk) => match ator.completed(tsk) {
+                    Tree::Lea(o) => match src {
+                        Some(rf) => rf.frame(&mut self.0).
+                                    innr.fill_slot(rf, o, ator),
+                        None => return o,
                     },
-
-                    // #use Invariant-popped-expansion
-                    _ => unreachable_fast!(),
-                }
-            }
-
-            // #use Invariant-expansion-owner
-            unreachable_fast!()
+                    Tree::Brc(b) => {
+                        self.0.push(Frame {src, innr:InFrame::new(*b, ator)});
+                        self.expand(ator);
+                    },
+                },
+                _ => unreachable_fast!(
+                    "expand() and each non-returning iteration leave top Task."
+                ),
+            }}
+            unreachable_fast!(
+                "The bottom Frame remains until it returns a leaf."
+            )
         }
     }
 }
