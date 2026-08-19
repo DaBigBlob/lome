@@ -54,7 +54,7 @@ pub trait LeafApplicator<Leaf> {
     fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
-/// Eager serial applicator for (ToTask, FromTask) function tuple
+/// Applicator impl for (ToTask, FromTask) function tuple
 impl<
     Leaf,
     Task,

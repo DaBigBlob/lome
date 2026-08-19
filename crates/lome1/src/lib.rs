@@ -34,17 +34,16 @@ pub enum Leaf<Con>{
 pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
 impl <Con> Tree<Con> {
     pub fn norm<A: ConApplicator<Con>>(self, applicator:&mut A) -> Con {
-        match self.0.norm(&mut normm::LeafApplicator(applicator)) {
+        match self.0.norm(&mut LeafApplicator(applicator)) {
             Leaf::Con(c) => c,
-            _ => unreachable!()
+            _ => unreachable!(
+                "Our LeafApplicator guarantees this is unreachable."
+            )
         }
     }
 }
 
-mod normm {
-use crate::{ConApplicator, Leaf};
-
-pub(super) struct LeafApplicator<From>(pub From);
+struct LeafApplicator<From>(pub From);
 
 impl<Con, A: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
 for LeafApplicator<&mut A> {
@@ -58,7 +57,4 @@ for LeafApplicator<&mut A> {
 
     fn completed(&mut self, task:Self::ApplicatorTask) -> lome0::Tree<Leaf<Con>>
     {lome0::Tree::Lea(Leaf::Con(self.0.completed(task)))}
-}
-
-
 }
