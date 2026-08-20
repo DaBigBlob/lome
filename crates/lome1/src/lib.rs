@@ -41,11 +41,11 @@ impl <Con> Into<lome0::Tree<Leaf<Con>>> for Tree<Con> {
 impl <Con> Tree<Con> {
     pub fn norm<A: ConApplicator<Con>>
     (self, applicator:&mut A) -> Leaf<Con> {
-        self.0.norm(&mut appli::Applicator(applicator))
+        self.0.norm(&mut application::Applicator(applicator))
     }
 }
 
-mod appli {
+mod application {
 
 use alloc::boxed::Box;
 use crate::{ConApplicator, Leaf, Tree};
@@ -79,15 +79,5 @@ for Applicator<&mut ConApp> {
         }
     }
 }
-
-}
-
-mod abstraction {
-
-use alloc::boxed::Box;
-use crate::Leaf;
-
-pub fn apply<Con>
-(abs:Box<(Leaf<Con>, Leaf<Con>)>, x:Leaf<Con>) {}
 
 }
