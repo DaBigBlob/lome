@@ -54,22 +54,6 @@ pub trait LeafApplicator<Leaf> {
     fn completed(&mut self, task:Self::ApplicatorTask) -> Tree<Leaf>;
 }
 
-/// Applicator impl for (ToTask, FromTask) function tuple
-impl<
-    Leaf,
-    Task,
-    ToTask:Fn(Leaf, Leaf) -> Task,
-    FromTask:Fn(Task) -> Tree<Leaf>
-> LeafApplicator<Leaf> for (ToTask, FromTask) {
-    type ApplicatorTask = Task;
-
-    fn task(&mut self, operator: Leaf, operand: Leaf) -> Self::ApplicatorTask
-    {self.0(operator, operand)}
-
-    fn completed(&mut self, task: Self::ApplicatorTask) -> Tree<Leaf>
-    {self.1(task)}
-}
-
 /// Principal Expression
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tree<Leaf> {
