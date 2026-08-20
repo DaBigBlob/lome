@@ -17,7 +17,8 @@ extern crate alloc;
 use alloc::boxed::Box;
 use lome0;
 
-pub trait ConApplicator<Con> {
+// default is an error constructor
+pub trait ConApplicator<Con>: Default {
     type ConTask;
     fn task(&mut self, operator:Con, operand:Leaf<Con>) -> Self::ConTask;
     fn completed(&mut self, task:Self::ConTask) -> Con;
@@ -78,5 +79,9 @@ for Applicator<&mut ConApp> {
         }
     }
 }
+
+}
+
+mod abstraction {
 
 }
