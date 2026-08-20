@@ -45,8 +45,8 @@ impl <Con> Tree<Con> {
 }
 
 mod application {
-use alloc::boxed::Box;
 
+use alloc::boxed::Box;
 use crate::{ConApplicator, Leaf, Tree};
 
 pub(super) enum Task<Con, ConApp: ConApplicator<Con>> {
