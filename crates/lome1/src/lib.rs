@@ -46,16 +46,21 @@ impl <Con> Tree<Con> {
 }
 
 mod application {
+pub mod context {
+
+pub struct Context {}
+
+}
 
 use alloc::boxed::Box;
 use crate::{ConApplicator, Leaf, Tree};
 
-pub(super) enum Task<Con, ConApp: ConApplicator<Con>> {
+pub enum Task<Con, ConApp: ConApplicator<Con>> {
     ConTask(ConApp::ConTask),
     Tree(Tree<Con>)
 }
 
-pub(super) struct Applicator<ConApp>(pub ConApp);
+pub struct Applicator<ConApp>(pub ConApp);
 impl <Con, ConApp: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
 for Applicator<&mut ConApp> {
     type ApplicatorTask = Task<Con, ConApp>;
