@@ -26,28 +26,16 @@ pub trait ConApplicator<Con> {
 // we must recognize that we are the Leaf implementors
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
-    App(Box<Tree<Con>>),
+    App(Box<lome0::Tree<Leaf<Con>>>),
     Con(Con)
-}
-pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
-impl <Con> Tree<Con> {
-    pub fn norm<A: ConApplicator<Con>>(self, applicator:&mut A) -> Con {
-        // match self.0.norm(&mut appli::Applicator(applicator)) {
-        //     Leaf::Con(c) => c,
-        //     _ => unreachable!(
-        //         "Our LeafApplicator.completed() guarantees this is unreachable."
-        //     )
-        // }
-        todo!()
-    }
 }
 
 mod application {
-use crate::{ConApplicator, Leaf, Tree};
+use crate::{ConApplicator, Leaf};
 
 pub(super) enum Task<Con, A: ConApplicator<Con>> {
     ConTask(A::ConTask),
-    Tree(Tree<Con>)
+    Tree(lome0::Tree<Leaf<Con>>)
 }
 
 pub(super) fn task<Con, A: ConApplicator<Con>>
@@ -60,10 +48,11 @@ pub(super) fn task<Con, A: ConApplicator<Con>>
 }
 
 pub(super) fn completed<Con, A: ConApplicator<Con>>
-(task:Task<Con, A>, ator:&mut A) -> Tree<Con> {
+(task:Task<Con, A>, ator:&mut A) -> lome0::Tree<Leaf<Con>> {
     match task {
-        Task::ConTask(ct) => todo!(),
-        Task::Tree(tree) => todo!(),
+        Task::ConTask(ct)
+        => lome0::Tree::Lea(Leaf::Con(ator.completed(ct))),
+        Task::Tree(tree) => tree,
     }
 }
 
