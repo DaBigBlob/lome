@@ -18,19 +18,25 @@ use alloc::boxed::Box;
 use lome0;
 
 // default is an error constructor
-pub trait ConApplicator<Con>: Default {
+pub trait ConApplicator<Con> {
     type ConTask;
     fn task(&mut self, operator:Con, operand:Leaf<Con>) -> Self::ConTask;
     fn completed(&mut self, task:Self::ConTask) -> Con;
 }
 
 // we must recognize that we are the Leaf implementors
+#[derive(Clone)]
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
     App(Box<Tree<Con>>),
     Con(Con)
 }
+impl <Con: Default> Default for Leaf<Con> {
+    /// This is the error constructor.
+    fn default() -> Self {Self::Con(Con::default())}
+}
 
+#[derive(Clone)]
 pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
 impl <Con> From<lome0::Tree<Leaf<Con>>> for Tree<Con> {
     fn from(value: lome0::Tree<Leaf<Con>>) -> Self {Self(value)}
@@ -48,7 +54,20 @@ impl <Con> Tree<Con> {
 mod application {
 pub mod context {
 
-pub struct Context {}
+use crate::Leaf;
+use hashbrown::HashMap;
+use core::hash::Hash;
+
+pub struct Context<Con>(HashMap<Con, Leaf<Con>>);
+impl <Con: Default + Eq + Hash + Clone> Context<Con> {
+    pub fn new() -> Self {Self(HashMap::new())}
+    pub fn get(&self, key:&Con) -> Leaf<Con> {
+        match self.0.get(key) {
+            Some(v) => v.clone(),
+            None => Leaf::default(), // error constructor: free variable bad
+        }
+    }
+}
 
 }
 
