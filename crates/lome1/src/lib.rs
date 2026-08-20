@@ -23,8 +23,6 @@ pub trait ConApplicator<Con> {
     fn completed(&mut self, task:Self::ConTask) -> Con;
 }
 
-// type App<Con> = AppTree<Box<Leaf<Con>>>;
-
 // we must recognize that we are the Leaf implementors
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
