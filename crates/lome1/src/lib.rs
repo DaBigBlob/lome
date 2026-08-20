@@ -30,7 +30,18 @@ pub enum Leaf<Con>{
     Con(Con)
 }
 
+pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
+impl <Con> From<lome0::Tree<Leaf<Con>>> for Tree<Con> {
+    fn from(value: lome0::Tree<Leaf<Con>>) -> Self {Self(value)}
+}
+impl <Con> Into<lome0::Tree<Leaf<Con>>> for Tree<Con> {
+    fn into(self) -> lome0::Tree<Leaf<Con>> {self.0}
+}
+impl <Con> Tree<Con> {}
+
 mod application {
+use alloc::boxed::Box;
+
 use crate::{ConApplicator, Leaf};
 
 pub(super) enum Task<Con, A: ConApplicator<Con>> {
@@ -41,7 +52,9 @@ pub(super) enum Task<Con, A: ConApplicator<Con>> {
 pub(super) fn task<Con, A: ConApplicator<Con>>
 (op:Leaf<Con>, x:Leaf<Con>, ator:&mut A) -> Task<Con, A> {
     match op {
-        Leaf::App(tree) => todo!(),
+        Leaf::App(_) => Task::Tree(lome0::Tree::Brc(Box::new(
+            (lome0::Tree::Lea(op), lome0::Tree::Lea(x))
+        ))),
         Leaf::Abs(op_) => todo!(),
         Leaf::Con(op_) => Task::ConTask(ator.task(op_, x))
     }
