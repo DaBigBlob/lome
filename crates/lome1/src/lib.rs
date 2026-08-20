@@ -26,7 +26,7 @@ pub trait ConApplicator<Con> {
 // we must recognize that we are the Leaf implementors
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
-    App(Box<lome0::Tree<Leaf<Con>>>),
+    App(Box<Tree<Con>>),
     Con(Con)
 }
 
@@ -42,11 +42,11 @@ impl <Con> Tree<Con> {}
 mod application {
 use alloc::boxed::Box;
 
-use crate::{ConApplicator, Leaf};
+use crate::{ConApplicator, Leaf, Tree};
 
 pub(super) enum Task<Con, A: ConApplicator<Con>> {
     ConTask(A::ConTask),
-    Tree(lome0::Tree<Leaf<Con>>)
+    Tree(Tree<Con>)
 }
 
 pub(super) fn task<Con, A: ConApplicator<Con>>
@@ -54,17 +54,17 @@ pub(super) fn task<Con, A: ConApplicator<Con>>
     match op {
         Leaf::App(_) => Task::Tree(lome0::Tree::Brc(Box::new(
             (lome0::Tree::Lea(op), lome0::Tree::Lea(x))
-        ))),
+        )).into()),
         Leaf::Abs(op_) => todo!(),
         Leaf::Con(op_) => Task::ConTask(ator.task(op_, x))
     }
 }
 
 pub(super) fn completed<Con, A: ConApplicator<Con>>
-(task:Task<Con, A>, ator:&mut A) -> lome0::Tree<Leaf<Con>> {
+(task:Task<Con, A>, ator:&mut A) -> Tree<Con> {
     match task {
         Task::ConTask(ct)
-        => lome0::Tree::Lea(Leaf::Con(ator.completed(ct))),
+        => lome0::Tree::Lea(Leaf::Con(ator.completed(ct))).into(),
         Task::Tree(tree) => tree,
     }
 }
