@@ -15,10 +15,14 @@
 
 extern crate alloc;
 use alloc::boxed::Box;
+use core::hash::Hash;
 use lome0;
 
+pub trait Constructor: Sized + Default + Eq + Hash + Clone {}
+impl <T: Sized + Default + Eq + Hash + Clone> Constructor for T {}
+
 // default is an error constructor
-pub trait ConApplicator<Con> {
+pub trait ConApplicator<Con: Constructor> {
     type ConTask;
     fn task(&mut self, operator:Con, operand:Leaf<Con>) -> Self::ConTask;
     fn completed(&mut self, task:Self::ConTask) -> Con;
@@ -26,45 +30,53 @@ pub trait ConApplicator<Con> {
 
 // we must recognize that we are the Leaf implementors
 #[derive(Clone)]
-pub enum Leaf<Con>{
+pub enum Leaf<Con: Constructor>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
-    App(Box<Tree<Con>>),
+    App(Box<lome0::Tree<Leaf<Con>>>),
     Con(Con)
 }
-impl <Con: Default> Default for Leaf<Con> {
+impl <Con: Constructor> Default for Leaf<Con> {
     /// This is the error constructor.
     fn default() -> Self {Self::Con(Con::default())}
 }
-
-#[derive(Clone)]
-pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
-impl <Con> From<lome0::Tree<Leaf<Con>>> for Tree<Con> {
-    fn from(value: lome0::Tree<Leaf<Con>>) -> Self {Self(value)}
-}
-impl <Con> Into<lome0::Tree<Leaf<Con>>> for Tree<Con> {
-    fn into(self) -> lome0::Tree<Leaf<Con>> {self.0}
-}
-impl <Con> Tree<Con> {
+impl <Con: Constructor> Leaf<Con> {
     pub fn norm<A: ConApplicator<Con>>
     (self, applicator:&mut A) -> Leaf<Con> {
-        self.0.norm(&mut application::Applicator(applicator))
+        match self {
+            Leaf::App(bt)=> (*bt).norm(&mut application::Applicator(
+                applicator,
+                application::context::Context::new()
+            )),
+            _ => self
+        }
     }
 }
+
+
 
 mod application {
 pub mod context {
 
-use crate::Leaf;
-use hashbrown::HashMap;
-use core::hash::Hash;
+use crate::{Constructor, Leaf};
+use hashbrown::{HashMap, hash_map::Entry};
 
-pub struct Context<Con>(HashMap<Con, Leaf<Con>>);
-impl <Con: Default + Eq + Hash + Clone> Context<Con> {
+pub struct Context<Con: Constructor>(HashMap<Con, Leaf<Con>>);
+impl <Con: Constructor> Context<Con> {
+    #[inline]
     pub fn new() -> Self {Self(HashMap::new())}
-    pub fn get(&self, key:&Con) -> Leaf<Con> {
-        match self.0.get(key) {
-            Some(v) => v.clone(),
-            None => Leaf::default(), // error constructor: free variable bad
+
+    #[inline]
+    pub fn get(&self, key:&Con) -> Option<Leaf<Con>>
+    {self.0.get(key).cloned()}
+
+    #[inline]
+    pub fn set(&mut self, key:Con, val:Leaf<Con>) -> bool {
+        match self.0.entry(key) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(entry) => {
+                entry.insert(val);
+                true
+            },
         }
     }
 }
@@ -72,16 +84,31 @@ impl <Con: Default + Eq + Hash + Clone> Context<Con> {
 }
 
 use alloc::boxed::Box;
-use crate::{ConApplicator, Leaf, Tree};
+use crate::{ConApplicator, Constructor, Leaf};
+use context::Context;
 
-pub enum Task<Con, ConApp: ConApplicator<Con>> {
+pub enum Task<Con: Constructor, ConApp: ConApplicator<Con>> {
     ConTask(ConApp::ConTask),
-    Tree(Tree<Con>)
+    Tree(lome0::Tree<Leaf<Con>>)
 }
 
-pub struct Applicator<ConApp>(pub ConApp);
-impl <Con, ConApp: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
-for Applicator<&mut ConApp> {
+pub struct Applicator<'a, Con: Constructor, ConApp: ConApplicator<Con>>
+(pub &'a mut ConApp, pub Context<Con>);
+impl <
+    'a,
+    Con: Constructor,
+    ConApp: ConApplicator<Con>
+> Applicator<'a, Con, ConApp> {
+    pub fn apply
+    (abs:Box<(Leaf<Con>, Leaf<Con>)>, x:Leaf<Con>) -> Leaf<Con> {
+        todo!()
+    }
+}
+impl <
+    'a,
+    Con: Constructor,
+    ConApp: ConApplicator<Con>
+> lome0::LeafApplicator<Leaf<Con>> for Applicator<'a, Con, ConApp> {
     type ApplicatorTask = Task<Con, ConApp>;
 
     fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>) -> Self::ApplicatorTask {
