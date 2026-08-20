@@ -61,9 +61,10 @@ for Applicator<&mut ConApp> {
 
     fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>) -> Self::ApplicatorTask {
         match operator {
-            Leaf::App(_) => Task::Tree(lome0::Tree::Brc(Box::new(
-                (lome0::Tree::Lea(operator), lome0::Tree::Lea(operand))
-            )).into()),
+            Leaf::App(_) => Task::Tree(lome0::Tree::Brc(Box::new((
+                lome0::Tree::Lea(operator),
+                lome0::Tree::Lea(operand)
+            ))).into()),
             Leaf::Abs(op_) => todo!(),
             Leaf::Con(op_) => Task::ConTask(self.0.task(op_, operand))
         }
