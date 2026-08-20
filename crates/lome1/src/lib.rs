@@ -52,9 +52,23 @@ use alloc::boxed::Box;
 
 use crate::{ConApplicator, Leaf, OTree};
 
-pub(super) enum Task<Con, A: ConApplicator<Con>> {
-    ConTask(A::ConTask),
+pub(super) enum Task<Con, ConApp: ConApplicator<Con>> {
+    ConTask(ConApp::ConTask),
     Tree(OTree<Con>)
+}
+
+pub(super) struct Applicator<ConApp>(pub ConApp);
+impl <Con, ConApp: ConApplicator<Con>> lome0::LeafApplicator<Leaf<Con>>
+for Applicator<&mut ConApp> {
+    type ApplicatorTask = Task<Con, ConApp>;
+
+    fn task(&mut self, operator:Leaf<Con>, operand:Leaf<Con>) -> Self::ApplicatorTask {
+        todo!()
+    }
+
+    fn completed(&mut self, task:Self::ApplicatorTask) -> lome0::Tree<Leaf<Con>> {
+        todo!()
+    }
 }
 
 pub(super) fn task<Con, A: ConApplicator<Con>>
