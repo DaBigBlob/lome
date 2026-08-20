@@ -26,35 +26,32 @@ pub trait ConApplicator<Con> {
 // we must recognize that we are the Leaf implementors
 pub enum Leaf<Con>{
     Abs(Box<(Leaf<Con>, Leaf<Con>)>),
-    App(Box<OTree<Con>>),
+    App(Box<Tree<Con>>),
     Con(Con)
 }
 
-pub struct OTree<Con>(lome0::Tree<Leaf<Con>>);
-impl <Con> From<lome0::Tree<Leaf<Con>>> for OTree<Con> {
+pub struct Tree<Con>(lome0::Tree<Leaf<Con>>);
+impl <Con> From<lome0::Tree<Leaf<Con>>> for Tree<Con> {
     fn from(value: lome0::Tree<Leaf<Con>>) -> Self {Self(value)}
 }
-impl <Con> Into<lome0::Tree<Leaf<Con>>> for OTree<Con> {
+impl <Con> Into<lome0::Tree<Leaf<Con>>> for Tree<Con> {
     fn into(self) -> lome0::Tree<Leaf<Con>> {self.0}
 }
-impl <Con> OTree<Con> {
+impl <Con> Tree<Con> {
     pub fn norm<A: ConApplicator<Con>>
     (self, applicator:&mut A) -> Leaf<Con> {
-        match self.0 {
-            lome0::Tree::Lea(lf) => lf,
-            lome0::Tree::Brc(_) => todo!(),
-        }
+        self.0.norm(&mut application::Applicator(applicator))
     }
 }
 
 mod application {
 use alloc::boxed::Box;
 
-use crate::{ConApplicator, Leaf, OTree};
+use crate::{ConApplicator, Leaf, Tree};
 
 pub(super) enum Task<Con, ConApp: ConApplicator<Con>> {
     ConTask(ConApp::ConTask),
-    Tree(OTree<Con>)
+    Tree(Tree<Con>)
 }
 
 pub(super) struct Applicator<ConApp>(pub ConApp);
