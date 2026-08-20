@@ -67,7 +67,11 @@ for Applicator<&mut ConApp> {
     }
 
     fn completed(&mut self, task:Self::ApplicatorTask) -> lome0::Tree<Leaf<Con>> {
-        todo!()
+        match task {
+            Task::ConTask(ct)
+            => lome0::Tree::Lea(Leaf::Con(self.0.completed(ct))).into(),
+            Task::Tree(tree) => tree.into(),
+        }
     }
 }
 
@@ -79,15 +83,6 @@ pub(super) fn task<Con, A: ConApplicator<Con>>
         )).into()),
         Leaf::Abs(op_) => todo!(),
         Leaf::Con(op_) => Task::ConTask(ator.task(op_, x))
-    }
-}
-
-pub(super) fn completed<Con, A: ConApplicator<Con>>
-(task:Task<Con, A>, ator:&mut A) -> OTree<Con> {
-    match task {
-        Task::ConTask(ct)
-        => lome0::Tree::Lea(Leaf::Con(ator.completed(ct))).into(),
-        Task::Tree(tree) => tree,
     }
 }
 
